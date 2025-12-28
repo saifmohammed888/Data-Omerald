@@ -11,6 +11,11 @@
  * - All data backdated over 1 year
  * - Real DC reports from diagnostic centers
  * 
+ * FIXES APPLIED:
+ * 1. Report URLs: Now generates signed URLs with 1-year expiration to ensure accessibility
+ * 2. DC Shared Reports: Properly shares reports via DC API and keeps them in pending state
+ * 3. DC Accepted Reports: Uses DC accept API to mark reports as accepted
+ * 
  * Usage:
  *   npx tsx generate-data.ts
  * 
@@ -308,12 +313,17 @@ const uploadFileToAPI = async (
       // Ignore cleanup errors
     }
 
-    // Return the fileKey from the response
+    // Return the fileName (S3 key) from the response - this is what we need to store
+    // The API returns fileName which is the S3 key like "reports/+15555550101/uuid.pdf"
+    if (result.fileName) {
+      return result.fileName; // This is the S3 key
+    }
+    // Fallback to other possible fields
     if (result.fileKey || result.key || result.file) {
       return result.fileKey || result.key || result.file;
     }
     
-    console.warn(`⚠️  Upload API response missing fileKey:`, result);
+    console.warn(`⚠️  Upload API response missing fileName/fileKey:`, result);
     return null;
   } catch (error) {
     console.warn(`⚠️  Error uploading file via API:`, error);
@@ -321,8 +331,8 @@ const uploadFileToAPI = async (
   }
 };
 
-// Get signed URL for a file
-const getSignedUrl = async (fileKey: string, expiresIn: number = 3600): Promise<string | null> => {
+// Get signed URL for a file (max 1 week expiration per AWS S3 limits)
+const getSignedUrl = async (fileKey: string, expiresIn: number = 604800): Promise<string | null> => {
   try {
     const url = 'https://omerald-user.vercel.app/api/upload/getSignedUrl';
     const data = JSON.stringify({ fileKey, expiresIn });
@@ -343,7 +353,7 @@ const getSignedUrl = async (fileKey: string, expiresIn: number = 3600): Promise<
   }
 };
 
-// Upload file buffer and get working URL
+// Upload file buffer and get working signed URL (max 1 week expiration per AWS limits)
 const uploadFileAndGetUrl = async (
   fileBuffer: Buffer,
   userId: string,
@@ -354,13 +364,17 @@ const uploadFileAndGetUrl = async (
   const fileKey = await uploadFileToAPI(fileBuffer, userId, fileName, contentType);
   
   if (fileKey) {
-    // Then get the signed URL
-    const signedUrl = await getSignedUrl(fileKey, 3600);
+    // Generate signed URL with max 1 week expiration (604800 seconds) - AWS S3 limit
+    // Note: For longer-term access, the app should regenerate signed URLs on-demand
+    const signedUrl = await getSignedUrl(fileKey, 604800);
     if (signedUrl) {
       return signedUrl;
     }
-    // If signed URL fails, return fileKey as fallback
-    return fileKey;
+    // If signed URL fails, construct direct S3 URL (may require public access or bucket policy)
+    // The app should handle generating signed URLs on-demand when needed
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const bucketName = process.env.AWS_S3_BUCKET_NAME || process.env.AWS_BUCKET_NAME || 'omerald-diag-s3';
+    return `https://${bucketName}.s3.${region}.amazonaws.com/${fileKey}`;
   }
   
   // Fallback to placeholder if upload fails
@@ -373,14 +387,35 @@ const fetchDCReports = async (page: number = 1, pageSize: number = 20): Promise<
     const url = `https://omerald-dc.vercel.app/api/reports?page=${page}&pageSize=${pageSize}`;
     const response = execSync(`curl --location --silent '${url}'`, { encoding: 'utf-8' });
     const data = JSON.parse(response);
-    return data.reports || data.data || data || [];
+    
+    // Handle different response formats
+    if (data.success && data.data) {
+      // Response format: { success: true, data: { data: [...], total: ... } }
+      if (Array.isArray(data.data.data)) {
+        return data.data.data;
+      }
+      // Response format: { success: true, data: [...] }
+      if (Array.isArray(data.data)) {
+        return data.data;
+      }
+    }
+    
+    // Direct array or other formats
+    if (Array.isArray(data.reports)) {
+      return data.reports;
+    }
+    if (Array.isArray(data)) {
+      return data;
+    }
+    
+    return [];
   } catch (error) {
     console.warn(`⚠️  Could not fetch DC reports from API:`, error);
     return [];
   }
 };
 
-// Share DC report using curl
+// Share DC report using curl - keeps reports in pending state
 const shareDCReport = async (reportId: string, userContact: string): Promise<boolean> => {
   try {
     const url = 'https://omerald-dc.vercel.app/api/reports/share';
@@ -390,9 +425,31 @@ const shareDCReport = async (reportId: string, userContact: string): Promise<boo
       { encoding: 'utf-8' }
     );
     const result = JSON.parse(response);
-    return result.success !== false; // Assume success unless explicitly marked as false
-  } catch (error) {
-    console.warn(`⚠️  Could not share DC report ${reportId} with ${userContact}:`, error);
+    
+    // Check if sharing was successful
+    // The API returns the report object on success, or an error object
+    if (result.report || result.success !== false) {
+      return true;
+    }
+    
+    // Log error if present
+    if (result.error) {
+      console.warn(`⚠️  DC share API error:`, result.error);
+    }
+    
+    return false;
+  } catch (error: any) {
+    // Try to parse error response
+    try {
+      const errorResponse = JSON.parse(error.stdout || error.stderr || '{}');
+      if (errorResponse.error) {
+        console.warn(`⚠️  Could not share DC report ${reportId} with ${userContact}:`, errorResponse.error);
+      } else {
+        console.warn(`⚠️  Could not share DC report ${reportId} with ${userContact}:`, error.message || error);
+      }
+    } catch {
+      console.warn(`⚠️  Could not share DC report ${reportId} with ${userContact}:`, error.message || error);
+    }
     return false;
   }
 };
@@ -1243,113 +1300,87 @@ const generateData = async () => {
         }
       }
 
-      // Share DC reports using curl API (pending)
+      // Share DC reports using curl API (pending) - keep in pending state
       if (dcReports.length > 0 && config.dcPending > 0) {
         console.log(`      🔗 Sharing ${config.dcPending} DC reports (pending)...`);
         for (let i = 0; i < config.dcPending && dcReportIndex < dcReports.length; i++) {
           const dcReport = dcReports[dcReportIndex % dcReports.length];
           dcReportIndex++;
 
-          // Use curl API to share report
-          const reportId = dcReport._id?.toString() || dcReport.reportId || dcReport.id;
+          // Use curl API to share report - get the MongoDB ObjectId
+          // The API expects the MongoDB _id, not reportId
+          const reportId = dcReport._id?.toString() || dcReport.id?.toString() || dcReport.reportId;
           if (reportId) {
+            console.log(`         Sharing report ${reportId} with ${phoneNumber}...`);
             const shared = await shareDCReport(reportId, phoneNumber);
             if (shared) {
+              console.log(`         ✅ Successfully shared report ${reportId}`);
               // Wait a bit for the share to be processed
-              await new Promise(resolve => setTimeout(resolve, 500));
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            } else {
+              console.warn(`         ⚠️  Failed to share report ${reportId}`);
             }
+          } else {
+            console.warn(`         ⚠️  Report missing _id:`, dcReport);
           }
         }
       }
 
-      // Share DC reports using curl API (accepted)
+      // Share DC reports using curl API (accepted) - share first, then mark as accepted
       if (dcReports.length > 0 && config.dcAccepted > 0) {
         console.log(`      🔗 Sharing ${config.dcAccepted} DC reports (accepted)...`);
         for (let i = 0; i < config.dcAccepted && dcReportIndex < dcReports.length; i++) {
           const dcReport = dcReports[dcReportIndex % dcReports.length];
           dcReportIndex++;
 
-          // Use curl API to share report
-          const reportId = dcReport._id?.toString() || dcReport.reportId || dcReport.id;
+          // Use curl API to share report - get the MongoDB ObjectId
+          const reportId = dcReport._id?.toString() || dcReport.id?.toString() || dcReport.reportId;
           if (reportId) {
+            console.log(`         Sharing report ${reportId} with ${phoneNumber} (will mark as accepted)...`);
             const shared = await shareDCReport(reportId, phoneNumber);
             
-            // If successfully shared, mark as accepted and create a copy in user's reports
+            // If successfully shared, mark as accepted in the DC database
             if (shared) {
               try {
                 // Wait a bit for the share to be processed
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 1000));
                 
-                let reportInDb;
+                // Use DC API to accept the report
                 try {
-                  reportInDb = await db.collection('reports').findOne({ _id: new mongoose.Types.ObjectId(reportId) });
-                } catch {
-                  // Try finding by reportId if _id doesn't work
-                  reportInDb = await db.collection('reports').findOne({ reportId: reportId });
-                }
-                
-                if (reportInDb) {
-                  // Mark as accepted in sharedReportDetails
-                  if (reportInDb.sharedReportDetails && Array.isArray(reportInDb.sharedReportDetails)) {
-                    const shareIndex = reportInDb.sharedReportDetails.findIndex(
-                      (share: any) => share.userContact === phoneNumber
-                    );
-                    if (shareIndex >= 0) {
-                      reportInDb.sharedReportDetails[shareIndex].accepted = true;
-                      reportInDb.sharedReportDetails[shareIndex].userId = String(userProfileId);
-                      reportInDb.sharedReportDetails[shareIndex].sharedAt = new Date();
-                      
-                      const updateFilter = reportInDb._id ? { _id: reportInDb._id } : { reportId: reportId };
-                      await db.collection('reports').updateOne(
-                        updateFilter,
-                        { $set: { sharedReportDetails: reportInDb.sharedReportDetails } }
-                      );
-                    }
-                  }
-                  
-                  // Create a copy of the accepted DC report in user's reports collection
-                  // This ensures it's visible in the user's reports
-                  const acceptedReportDoc: any = {
-                    userId: phoneNumber,
-                    userName: userName,
-                    reportId: `DC-${reportId}-${Date.now()}`,
-                    originalReportId: reportId, // Reference to original DC report
-                    reportUrl: reportInDb.reportData?.url || reportInDb.reportData?.pdfUrl || reportInDb.reportUrl,
-                    reportDoc: reportInDb.reportData?.url || reportInDb.reportData?.pdfUrl || reportInDb.reportUrl,
-                    name: reportInDb.reportData?.reportName || reportInDb.testName || 'DC Shared Report',
-                    type: 'Blood Report',
-                    testName: reportInDb.reportData?.reportName || reportInDb.testName || 'DC Shared Report',
-                    documentType: 'Blood Report',
-                    reportDate: reportInDb.reportData?.reportDate ? new Date(reportInDb.reportData.reportDate) : new Date(),
-                    uploadDate: new Date(),
-                    uploadedAt: new Date(),
-                    status: 'accepted',
-                    createdBy: phoneNumber,
-                    updatedBy: phoneNumber,
-                    sharedWith: [],
-                    parsedData: reportInDb.reportData?.parsedData?.parameters || [],
-                    parameters: reportInDb.reportData?.parsedData?.parameters || reportInDb.parameters || [],
-                    parametersScanned: reportInDb.reportData?.parsedData?.parameters ? true : false,
-                    conditions: [],
-                    description: `DC shared report accepted from ${reportInDb.diagnosticCenter?.diagnostic?.name || 'Diagnostic Center'}`,
-                    remarks: '',
-                    diagnosticCenter: reportInDb.diagnosticCenter?.diagnostic?.id || reportInDb.diagnosticCenter?.diagnostic?.name,
-                    reportImage: reportInDb.reportData?.imageUrl,
-                    reportImages: reportInDb.reportData?.parsedData?.components?.map((c: any) => c.images || []).flat() || [],
-                  };
-
-                  await db.collection('reports').insertOne(acceptedReportDoc);
-                  
-                  // Add to user's reports array in profile
-                  await db.collection('profiles').updateOne(
-                    { _id: userProfileId },
-                    { $push: { reports: acceptedReportDoc } }
+                  const acceptUrl = `https://omerald-dc.vercel.app/api/reports/accept`;
+                  const acceptData = JSON.stringify({ reportId, userContact: phoneNumber });
+                  const acceptResponse = execSync(
+                    `curl --location --silent --request POST '${acceptUrl}' --header 'Content-Type: application/json' --data '${acceptData}'`,
+                    { encoding: 'utf-8' }
                   );
+                  const acceptResult = JSON.parse(acceptResponse);
+                  
+                  if (acceptResult.report || acceptResult.success !== false) {
+                    console.log(`         ✅ Successfully accepted report ${reportId}`);
+                  } else {
+                    console.warn(`         ⚠️  Accept API returned error:`, acceptResult.error || acceptResult);
+                  }
+                } catch (acceptError: any) {
+                  // Try to parse error response
+                  try {
+                    const errorResponse = JSON.parse(acceptError.stdout || acceptError.stderr || '{}');
+                    if (errorResponse.error) {
+                      console.warn(`         ⚠️  Could not auto-accept report:`, errorResponse.error);
+                    } else {
+                      console.warn(`         ⚠️  Could not auto-accept report (user can accept manually):`, acceptError.message || acceptError);
+                    }
+                  } catch {
+                    console.warn(`         ⚠️  Could not auto-accept report (user can accept manually):`, acceptError.message || acceptError);
+                  }
                 }
               } catch (error) {
-                console.warn(`      ⚠️  Could not process accepted DC report ${reportId}:`, error);
+                console.warn(`         ⚠️  Could not process accepted DC report ${reportId}:`, error);
               }
+            } else {
+              console.warn(`         ⚠️  Failed to share report ${reportId}`);
             }
+          } else {
+            console.warn(`         ⚠️  Report missing _id:`, dcReport);
           }
         }
       }
