@@ -1,0 +1,33 @@
+{
+  "name": "omerald-admin-test-data",
+  "version": "1.0.0",
+  "description": "Test data generation scripts for Omerald Admin",
+  "type": "module",
+  "scripts": {
+    "generate": "tsx generate-data.ts",
+    "clear": "tsx clear-data.ts",
+    "generate:ts-node": "ts-node --esm generate-data.ts",
+    "clear:ts-node": "ts-node --esm clear-data.ts"
+  },
+  "keywords": [
+    "test-data",
+    "omerald",
+    "admin"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "mongoose": "^8.5.0",
+    "xlsx": "^0.18.5"
+  },
+  "optionalDependencies": {
+    "@clerk/clerk-sdk-node": "^5.0.0"
+  }
+}
