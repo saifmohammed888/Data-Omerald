@@ -2,6 +2,12 @@
 
 This repository contains test data generation scripts and documentation for all Omerald applications.
 
+## 🌐 Application URLs
+
+- **User App**: [https://www.omerald.com/](https://www.omerald.com/)
+- **Diagnostic Center (DC) App**: [https://diagnostic.omerald.com/](https://diagnostic.omerald.com/)
+- **Admin App**: [https://admin.omerald.com/](https://admin.omerald.com/)
+
 ## 📋 Quick Navigation
 
 - [Test Users](#test-users)

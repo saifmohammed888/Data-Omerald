@@ -300,7 +300,7 @@ const uploadFileToAPI = async (
     // Upload using curl to the API
     // Escape file path for shell safety
     const escapedPath = tmpFilePath.replace(/'/g, "'\"'\"'");
-    const url = 'https://omerald-user.vercel.app/api/upload/report';
+    const url = 'https://www.omerald.com/api/upload/report';
     const command = `curl --location --silent --form 'file=@"${escapedPath}"' --form 'userId="${userId}"' '${url}'`;
     
     const response = execSync(command, { encoding: 'utf-8', shell: '/bin/bash' });
@@ -334,7 +334,7 @@ const uploadFileToAPI = async (
 // Get signed URL for a file (max 1 week expiration per AWS S3 limits)
 const getSignedUrl = async (fileKey: string, expiresIn: number = 604800): Promise<string | null> => {
   try {
-    const url = 'https://omerald-user.vercel.app/api/upload/getSignedUrl';
+    const url = 'https://www.omerald.com/api/upload/getSignedUrl';
     const data = JSON.stringify({ fileKey, expiresIn });
     const command = `curl --location --silent --request POST '${url}' --header 'Content-Type: application/json' --data '${data}'`;
     
@@ -384,7 +384,7 @@ const uploadFileAndGetUrl = async (
 // Fetch DC reports using curl
 const fetchDCReports = async (page: number = 1, pageSize: number = 20): Promise<any[]> => {
   try {
-    const url = `https://omerald-dc.vercel.app/api/reports?page=${page}&pageSize=${pageSize}`;
+    const url = `https://diagnostic.omerald.com/api/reports?page=${page}&pageSize=${pageSize}`;
     const response = execSync(`curl --location --silent '${url}'`, { encoding: 'utf-8' });
     const data = JSON.parse(response);
     
@@ -418,7 +418,7 @@ const fetchDCReports = async (page: number = 1, pageSize: number = 20): Promise<
 // Share DC report using curl - keeps reports in pending state
 const shareDCReport = async (reportId: string, userContact: string): Promise<boolean> => {
   try {
-    const url = 'https://omerald-dc.vercel.app/api/reports/share';
+    const url = 'https://diagnostic.omerald.com/api/reports/share';
     const data = JSON.stringify({ reportId, userContact });
     const response = execSync(
       `curl --location --silent --request POST '${url}' --header 'Content-Type: application/json' --data '${data}'`,
@@ -1347,7 +1347,7 @@ const generateData = async () => {
                 
                 // Use DC API to accept the report
                 try {
-                  const acceptUrl = `https://omerald-dc.vercel.app/api/reports/accept`;
+                  const acceptUrl = `https://diagnostic.omerald.com/api/reports/accept`;
                   const acceptData = JSON.stringify({ reportId, userContact: phoneNumber });
                   const acceptResponse = execSync(
                     `curl --location --silent --request POST '${acceptUrl}' --header 'Content-Type: application/json' --data '${acceptData}'`,
