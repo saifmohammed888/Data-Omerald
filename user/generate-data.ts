@@ -29,6 +29,8 @@ import { fileURLToPath } from 'url';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import PDFDocument from 'pdfkit';
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,23 +53,16 @@ let Profile: any, Reports: any;
 // Configuration
 const PHONE_START = 101; // +15555550101
 const PHONE_END = 120;   // +15555550120
-const TOTAL_USERS = 10;
+const TOTAL_USERS = 5;
 
-// Performance optimization: Skip PDF generation (use placeholder URLs)
-const SKIP_PDF_GENERATION = true; // Set to false to generate actual PDFs
-
-// User combinations configuration - each user gets different data
+// User combinations configuration - 5 users as per USER_STRUCTURE.md
+// Updated: All users have 2 pending and 3 accepted DC reports
 const USER_CONFIGS = [
-  { members: 0, userReports: 5, memberReports: 0, dcPending: 0, dcAccepted: 0, userShared: 0 }, // User 1: Reports only, no members
-  { members: 3, userReports: 0, memberReports: 6, dcPending: 2, dcAccepted: 0, userShared: 0 }, // User 2: Members only, pending DC
-  { members: 5, userReports: 3, memberReports: 10, dcPending: 2, dcAccepted: 2, userShared: 1 }, // User 3: Full setup
-  { members: 2, userReports: 1, memberReports: 4, dcPending: 1, dcAccepted: 1, userShared: 0 }, // User 4: Minimal
-  { members: 0, userReports: 0, memberReports: 0, dcPending: 3, dcAccepted: 0, userShared: 0 }, // User 5: DC pending only
-  { members: 1, userReports: 10, memberReports: 2, dcPending: 0, dcAccepted: 3, userShared: 2 }, // User 6: Many reports, accepted DC
-  { members: 4, userReports: 2, memberReports: 8, dcPending: 0, dcAccepted: 0, userShared: 1 }, // User 7: No DC reports
-  { members: 3, userReports: 4, memberReports: 6, dcPending: 1, dcAccepted: 2, userShared: 0 }, // User 8: Mixed
-  { members: 5, userReports: 0, memberReports: 0, dcPending: 0, dcAccepted: 0, userShared: 0 }, // User 9: Members only, no reports
-  { members: 2, userReports: 8, memberReports: 4, dcPending: 2, dcAccepted: 1, userShared: 1 }, // User 10: Many user reports
+  { members: 0, userReports: 5, memberReports: 0, dcPending: 2, dcAccepted: 3, userShared: 0 }, // User 1: Reports only, no members
+  { members: 3, userReports: 0, memberReports: 6, dcPending: 2, dcAccepted: 3, userShared: 0 }, // User 2: Members only, pending DC
+  { members: 5, userReports: 3, memberReports: 10, dcPending: 2, dcAccepted: 3, userShared: 1 }, // User 3: Full setup (all features)
+  { members: 0, userReports: 0, memberReports: 0, dcPending: 2, dcAccepted: 3, userShared: 0 }, // User 4: DC pending only
+  { members: 1, userReports: 10, memberReports: 2, dcPending: 2, dcAccepted: 3, userShared: 2 }, // User 5: Many reports, accepted DC
 ];
 
 // Indian Telugu names
@@ -222,6 +217,186 @@ const getS3Client = (): S3Client | null => {
 
 const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || process.env.AWS_BUCKET_NAME || 'omerald-diag-s3';
 
+// Paths to sample files
+const SAMPLE_REPORTS_DIR = path.join(__dirname, 'sample_blood_reports');
+const SAMPLE_IMAGES_DIR = path.join(__dirname, 'sample_blood_report_images');
+
+// Get list of sample PDF files
+const getSamplePDFFiles = (): string[] => {
+  try {
+    const files = fs.readdirSync(SAMPLE_REPORTS_DIR);
+    return files.filter(f => f.toLowerCase().endsWith('.pdf')).sort();
+  } catch (error) {
+    console.warn('⚠️  Could not read sample reports directory:', error);
+    return [];
+  }
+};
+
+// Get list of sample image files
+const getSampleImageFiles = (): string[] => {
+  try {
+    const files = fs.readdirSync(SAMPLE_IMAGES_DIR);
+    return files.filter(f => /\.(png|jpg|jpeg)$/i.test(f)).sort();
+  } catch (error) {
+    console.warn('⚠️  Could not read sample images directory:', error);
+    return [];
+  }
+};
+
+// Read a sample PDF file
+const readSamplePDF = (index: number): Buffer | null => {
+  const pdfFiles = getSamplePDFFiles();
+  if (pdfFiles.length === 0) {
+    return null;
+  }
+  const fileName = pdfFiles[index % pdfFiles.length];
+  const filePath = path.join(SAMPLE_REPORTS_DIR, fileName);
+  try {
+    return fs.readFileSync(filePath);
+  } catch (error) {
+    console.warn(`⚠️  Could not read PDF file ${fileName}:`, error);
+    return null;
+  }
+};
+
+// Read a sample image file
+const readSampleImage = (index: number): Buffer | null => {
+  const imageFiles = getSampleImageFiles();
+  if (imageFiles.length === 0) {
+    return null;
+  }
+  const fileName = imageFiles[index % imageFiles.length];
+  const filePath = path.join(SAMPLE_IMAGES_DIR, fileName);
+  try {
+    return fs.readFileSync(filePath);
+  } catch (error) {
+    console.warn(`⚠️  Could not read image file ${fileName}:`, error);
+    return null;
+  }
+};
+
+// Upload file using the User API
+const uploadFileToAPI = async (
+  fileBuffer: Buffer,
+  userId: string,
+  fileName: string,
+  contentType: string
+): Promise<string | null> => {
+  try {
+    // Save file to temporary location
+    const tmpDir = path.join(__dirname, 'tmp');
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+    const tmpFilePath = path.join(tmpDir, fileName);
+    // Write buffer to file - Buffer is compatible with writeFileSync
+    fs.writeFileSync(tmpFilePath, fileBuffer as any);
+
+    // Upload using curl to the API
+    // Escape file path for shell safety
+    const escapedPath = tmpFilePath.replace(/'/g, "'\"'\"'");
+    const url = 'https://omerald-user.vercel.app/api/upload/report';
+    const command = `curl --location --silent --form 'file=@"${escapedPath}"' --form 'userId="${userId}"' '${url}'`;
+    
+    const response = execSync(command, { encoding: 'utf-8', shell: '/bin/bash' });
+    const result = JSON.parse(response);
+    
+    // Clean up temporary file
+    try {
+      fs.unlinkSync(tmpFilePath);
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
+
+    // Return the fileKey from the response
+    if (result.fileKey || result.key || result.file) {
+      return result.fileKey || result.key || result.file;
+    }
+    
+    console.warn(`⚠️  Upload API response missing fileKey:`, result);
+    return null;
+  } catch (error) {
+    console.warn(`⚠️  Error uploading file via API:`, error);
+    return null;
+  }
+};
+
+// Get signed URL for a file
+const getSignedUrl = async (fileKey: string, expiresIn: number = 3600): Promise<string | null> => {
+  try {
+    const url = 'https://omerald-user.vercel.app/api/upload/getSignedUrl';
+    const data = JSON.stringify({ fileKey, expiresIn });
+    const command = `curl --location --silent --request POST '${url}' --header 'Content-Type: application/json' --data '${data}'`;
+    
+    const response = execSync(command, { encoding: 'utf-8' });
+    const result = JSON.parse(response);
+    
+    if (result.url || result.signedUrl || result.urlPath) {
+      return result.url || result.signedUrl || result.urlPath;
+    }
+    
+    console.warn(`⚠️  Signed URL API response missing url:`, result);
+    return null;
+  } catch (error) {
+    console.warn(`⚠️  Error getting signed URL:`, error);
+    return null;
+  }
+};
+
+// Upload file buffer and get working URL
+const uploadFileAndGetUrl = async (
+  fileBuffer: Buffer,
+  userId: string,
+  fileName: string,
+  contentType: string
+): Promise<string> => {
+  // First upload the file
+  const fileKey = await uploadFileToAPI(fileBuffer, userId, fileName, contentType);
+  
+  if (fileKey) {
+    // Then get the signed URL
+    const signedUrl = await getSignedUrl(fileKey, 3600);
+    if (signedUrl) {
+      return signedUrl;
+    }
+    // If signed URL fails, return fileKey as fallback
+    return fileKey;
+  }
+  
+  // Fallback to placeholder if upload fails
+  return `https://placeholder.s3.amazonaws.com/reports/${userId}/${fileName}`;
+};
+
+// Fetch DC reports using curl
+const fetchDCReports = async (page: number = 1, pageSize: number = 20): Promise<any[]> => {
+  try {
+    const url = `https://omerald-dc.vercel.app/api/reports?page=${page}&pageSize=${pageSize}`;
+    const response = execSync(`curl --location --silent '${url}'`, { encoding: 'utf-8' });
+    const data = JSON.parse(response);
+    return data.reports || data.data || data || [];
+  } catch (error) {
+    console.warn(`⚠️  Could not fetch DC reports from API:`, error);
+    return [];
+  }
+};
+
+// Share DC report using curl
+const shareDCReport = async (reportId: string, userContact: string): Promise<boolean> => {
+  try {
+    const url = 'https://omerald-dc.vercel.app/api/reports/share';
+    const data = JSON.stringify({ reportId, userContact });
+    const response = execSync(
+      `curl --location --silent --request POST '${url}' --header 'Content-Type: application/json' --data '${data}'`,
+      { encoding: 'utf-8' }
+    );
+    const result = JSON.parse(response);
+    return result.success !== false; // Assume success unless explicitly marked as false
+  } catch (error) {
+    console.warn(`⚠️  Could not share DC report ${reportId} with ${userContact}:`, error);
+    return false;
+  }
+};
+
 // Generate realistic PDF report
 const generatePDFReport = async (
   patientName: string,
@@ -315,9 +490,9 @@ const generateTestResults = (reportType: string): Array<{ parameter: string; val
   ];
 };
 
-// Upload PDF to S3 (or return placeholder if skipped)
+// Upload PDF to S3 (or return placeholder if skipped) - DEPRECATED, use uploadFileToS3 instead
 const uploadPDFToS3 = async (pdfBuffer: Buffer | null, userId: string, reportId: string): Promise<string> => {
-  if (SKIP_PDF_GENERATION || !pdfBuffer) {
+  if (!pdfBuffer) {
     return `https://placeholder.s3.amazonaws.com/reports/${userId}/${reportId}.pdf`;
   }
 
@@ -397,8 +572,8 @@ const generateBMIData = (dob: Date, isPediatric: boolean): any[] => {
   return bmiData;
 };
 
-// Generate MUAC data (for pediatric only, backdated over 1 year) - Reduced for performance
-const generateMUACData = (dob: Date): any[] => {
+// Generate MUAC data (for pediatric and adults, backdated over 1 year) - Reduced for performance
+const generateMUACData = (dob: Date, isPediatric: boolean): any[] => {
   const muacData: any[] = [];
   const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
   const now = new Date();
@@ -414,20 +589,26 @@ const generateMUACData = (dob: Date): any[] => {
 
   dates.forEach((date) => {
     // MUAC in cm (Mid-Upper Arm Circumference)
-    // Normal range: 12.5-16.5 cm for children
-    let height;
-    if (ageInMonths < 12) {
-      height = randomFloat(11, 14, 1);
-    } else if (ageInMonths < 24) {
-      height = randomFloat(12, 15, 1);
-    } else if (ageInMonths < 60) {
-      height = randomFloat(13, 16, 1);
+    let muacValue: number;
+    if (isPediatric) {
+      // Normal range: 12.5-16.5 cm for children
+      if (ageInMonths < 12) {
+        muacValue = randomFloat(11, 14, 1);
+      } else if (ageInMonths < 24) {
+        muacValue = randomFloat(12, 15, 1);
+      } else if (ageInMonths < 60) {
+        muacValue = randomFloat(13, 16, 1);
+      } else {
+        muacValue = randomFloat(14, 17, 1);
+      }
     } else {
-      height = randomFloat(14, 17, 1);
+      // Adult MUAC: Normal range is typically 22-30 cm for adults
+      // For adults, MUAC is used to assess nutritional status
+      muacValue = randomFloat(22, 30, 1);
     }
 
     muacData.push({
-      height: Math.round(height * 10) / 10,
+      height: Math.round(muacValue * 10) / 10,
       updatedDate: date,
       comment: [],
     });
@@ -565,6 +746,95 @@ const generateDiagnosedConditionsData = (): any[] => {
   return conditions;
 };
 
+// Initialize vaccination schedule with doses but completed as null
+const initializeVaccinationSchedule = async (db: any): Promise<any> => {
+  try {
+    // Fetch all doses from the database with populated vaccine and doseDuration
+    const doses = await db.collection('dose').aggregate([
+      {
+        $lookup: {
+          from: 'vaccine',
+          localField: 'vaccine',
+          foreignField: '_id',
+          as: 'vaccineData'
+        }
+      },
+      {
+        $lookup: {
+          from: 'doseDuration',
+          localField: 'doseDuration',
+          foreignField: '_id',
+          as: 'doseDurationData'
+        }
+      },
+      {
+        $unwind: { path: '$vaccineData', preserveNullAndEmptyArrays: true }
+      },
+      {
+        $unwind: { path: '$doseDurationData', preserveNullAndEmptyArrays: true }
+      }
+    ]).toArray();
+    
+    if (doses.length === 0) {
+      // Try without aggregation if aggregation fails
+      const simpleDoses = await db.collection('dose').find({}).toArray();
+      if (simpleDoses.length === 0) {
+        return {};
+      }
+      
+      // Use simple doses without population
+      const vaccineCompletions: any = {};
+      for (const dose of simpleDoses) {
+        const doseId = String(dose._id);
+        const vaccineId = dose.vaccine ? String(dose.vaccine) : '';
+        const doseName = dose.name || 'Unknown Dose';
+        
+        vaccineCompletions[doseId] = {
+          doseId: doseId,
+          doseName: doseName,
+          vaccineId: vaccineId,
+          vaccineName: 'Unknown Vaccine',
+          duration: '',
+          completed: null, // Keep completed as null
+          dateAdministered: null,
+          remark: '',
+          completedAt: null,
+        };
+      }
+      return vaccineCompletions;
+    }
+
+    const vaccineCompletions: any = {};
+    
+    // Initialize each dose with completed as null
+    for (const dose of doses) {
+      const doseId = String(dose._id);
+      const vaccineId = dose.vaccineData ? String(dose.vaccineData._id) : (dose.vaccine ? String(dose.vaccine) : '');
+      const vaccineName = dose.vaccineData?.name || 'Unknown Vaccine';
+      const doseName = dose.name || 'Unknown Dose';
+      const duration = dose.doseDurationData?.duration || 0;
+      const durationType = dose.doseDurationData?.type || 'month';
+
+      vaccineCompletions[doseId] = {
+        doseId: doseId,
+        doseName: doseName,
+        vaccineId: vaccineId,
+        vaccineName: vaccineName,
+        duration: `${duration} ${durationType}`,
+        completed: null, // Keep completed as null
+        dateAdministered: null,
+        remark: '',
+        completedAt: null,
+      };
+    }
+
+    return vaccineCompletions;
+  } catch (error) {
+    console.warn(`   ⚠️  Error initializing vaccination schedule:`, error);
+    return {};
+  }
+};
+
 // Main data generation function
 const generateData = async () => {
   try {
@@ -585,6 +855,9 @@ const generateData = async () => {
     console.log('✅ Models loaded\n');
 
     const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error('Database connection not established');
+    }
 
     // Clear existing test data
     console.log('🧹 Cleaning up existing test data...');
@@ -603,27 +876,39 @@ const generateData = async () => {
       console.log('   Continuing with data generation...\n');
     }
 
-    // Fetch DC reports to link shared reports
-    console.log('📋 Fetching DC reports for shared reports integration...');
+    // Fetch DC reports using curl API
+    console.log('📋 Fetching DC reports using API...');
     let dcReports: any[] = [];
     try {
-      dcReports = await db.collection('reports').find({
-        'diagnosticCenter': { $exists: true },
-        'sharedReportDetails': { $exists: true },
-        'userId': { $exists: false },
-      }).limit(200).toArray();
-      console.log(`✅ Found ${dcReports.length} DC reports for shared reports integration\n`);
+      dcReports = await fetchDCReports(1, 200);
+      console.log(`✅ Fetched ${dcReports.length} DC reports from API\n`);
     } catch (error) {
-      console.warn(`   ⚠️  Could not fetch DC reports: ${error}`);
-      console.log('   Continuing without DC shared reports integration...\n');
+      console.warn(`   ⚠️  Could not fetch DC reports from API: ${error}`);
+      // Fallback to database query
+      try {
+        dcReports = await db.collection('reports').find({
+          'diagnosticCenter': { $exists: true },
+          'sharedReportDetails': { $exists: true },
+          'userId': { $exists: false },
+        }).limit(200).toArray();
+        console.log(`✅ Found ${dcReports.length} DC reports from database\n`);
+      } catch (dbError) {
+        console.warn(`   ⚠️  Could not fetch DC reports from database: ${dbError}`);
+        console.log('   Continuing without DC shared reports integration...\n');
+      }
     }
 
     const s3Client = getS3Client();
-    if (SKIP_PDF_GENERATION) {
-      console.log('⚡ Performance mode: Skipping PDF generation (using placeholder URLs)\n');
-    } else if (!s3Client) {
-      console.warn('⚠️  S3 not configured - PDFs will use placeholder URLs\n');
+    if (!s3Client) {
+      console.warn('⚠️  S3 not configured - PDFs and images will use placeholder URLs\n');
+    } else {
+      console.log('✅ S3 configured - PDFs and images will be uploaded to S3\n');
     }
+
+    // Check if sample files are available
+    const samplePDFs = getSamplePDFFiles();
+    const sampleImages = getSampleImageFiles();
+    console.log(`📁 Sample files available: ${samplePDFs.length} PDFs, ${sampleImages.length} images\n`);
 
     // Generate users with different combinations
     console.log('👥 Creating Users with Different Combinations...');
@@ -645,6 +930,13 @@ const generateData = async () => {
       const dob = randomDate(new Date(1970, 0, 1), new Date(2000, 11, 31));
       const age = calculateAge(dob);
 
+      // Initialize vaccination schedule
+      const vaccineCompletions = await initializeVaccinationSchedule(db);
+
+      // Determine subscription - users 0101 and 0102 should be Premium (exec)
+      // Phone numbers: 0101 = index 0, 0102 = index 1
+      const subscription = (userIdx === 0 || userIdx === 1) ? 'Premium' : 'Free';
+
       // Create user profile with all fields
       const userProfileDoc = {
         phoneNumber,
@@ -664,7 +956,7 @@ const generateData = async () => {
         },
         createdDate: randomDate(oneYearAgo, now),
         userType: 'Primary',
-        subscription: 'Free',
+        subscription: subscription,
         members: [],
         reports: [],
         sharedReports: [],
@@ -674,7 +966,7 @@ const generateData = async () => {
         healthTopics: [],
         bmi: generateBMIData(dob, false),
         anthopometric: [],
-        muac: [],
+        muac: generateMUACData(dob, false), // Add MUAC for users
         foodAllergies: generateFoodAllergiesData(),
         iapGrowthCharts: [],
         notification: [],
@@ -682,6 +974,7 @@ const generateData = async () => {
         isPediatric: false,
         isDoctor: false,
         doctorApproved: false,
+        vaccineCompletions: vaccineCompletions, // Initialize vaccination schedule
       };
 
       const userProfileResult = await db.collection('profiles').insertOne(userProfileDoc);
@@ -723,11 +1016,12 @@ const generateData = async () => {
 
         // Generate member-specific data
         const memberBMIData = generateBMIData(memberDOB, isPediatric);
-        const memberMUACData = isPediatric ? generateMUACData(memberDOB) : [];
+        const memberMUACData = generateMUACData(memberDOB, isPediatric); // Generate MUAC for all members
         const memberAnthroData = isPediatric ? generateAnthropometricData(memberDOB) : [];
         const memberIAPData = isPediatric ? generateIAPGrowthChartsData(memberDOB) : [];
         const memberFoodAllergies = generateFoodAllergiesData();
         const memberConditions = generateDiagnosedConditionsData();
+        const memberVaccineCompletions = await initializeVaccinationSchedule(db);
 
         const memberProfileDoc = {
           phoneNumber: memberPhoneNumber,
@@ -765,6 +1059,7 @@ const generateData = async () => {
           isPediatric: isPediatric,
           isDoctor: false,
           doctorApproved: false,
+          vaccineCompletions: memberVaccineCompletions, // Initialize vaccination schedule
         };
 
         const memberProfileResult = await db.collection('profiles').insertOne(memberProfileDoc);
@@ -807,24 +1102,29 @@ const generateData = async () => {
         const reportDate = randomDate(oneYearAgo, now);
         const reportId = `RPT-${userIdx}-${reportIdx}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-        // Generate PDF (skip if SKIP_PDF_GENERATION is true)
-        let pdfBuffer: Buffer | null = null;
-        if (!SKIP_PDF_GENERATION) {
-          pdfBuffer = await generatePDFReport(
-            userName,
-            reportType,
-            reportDate,
-            age,
-            gender,
-            userProfileDoc.bloodGroup
-          );
+        // Use sample PDF from sample_blood_reports folder
+        const pdfBuffer = readSamplePDF(reportIdx);
+        let reportUrl: string;
+        let reportImageUrl: string | undefined;
+
+        if (pdfBuffer) {
+          // Upload PDF using API and get signed URL
+          const pdfFileName = `${reportId}.pdf`;
+          reportUrl = await uploadFileAndGetUrl(pdfBuffer, phoneNumber, pdfFileName, 'application/pdf');
+          
+          // Optionally add an image from sample_blood_report_images
+          const imageBuffer = readSampleImage(reportIdx);
+          if (imageBuffer) {
+            const imageFileName = `${reportId}_image.png`;
+            reportImageUrl = await uploadFileAndGetUrl(imageBuffer, phoneNumber, imageFileName, 'image/png');
+          }
+        } else {
+          // Fallback to placeholder if no sample PDF available
+          reportUrl = `https://placeholder.s3.amazonaws.com/reports/${phoneNumber}/${reportId}.pdf`;
         }
 
-        // Upload to S3 (or get placeholder)
-        const reportUrl = await uploadPDFToS3(pdfBuffer, phoneNumber, reportId);
-
         // Create report document
-        const reportDoc = {
+        const reportDoc: any = {
           userId: phoneNumber,
           userName: userName,
           reportId: reportId,
@@ -848,6 +1148,12 @@ const generateData = async () => {
           description: `User-uploaded ${reportType} report`,
           remarks: '',
         };
+
+        // Add image URL if available
+        if (reportImageUrl) {
+          reportDoc.reportImage = reportImageUrl;
+          reportDoc.reportImages = [reportImageUrl];
+        }
 
         await db.collection('reports').insertOne(reportDoc);
         userReports.push(reportDoc);
@@ -874,24 +1180,29 @@ const generateData = async () => {
           const memberDOBDate = member.dob instanceof Date ? member.dob : new Date(member.dob);
           const memberAge = calculateAge(memberDOBDate);
 
-          // Generate PDF (skip if SKIP_PDF_GENERATION is true)
-          let pdfBuffer: Buffer | null = null;
-          if (!SKIP_PDF_GENERATION) {
-            pdfBuffer = await generatePDFReport(
-              `${member.firstName} ${member.lastName}`,
-              reportType,
-              reportDate,
-              memberAge,
-              member.gender,
-              member.bloodGroup
-            );
+          // Use sample PDF from sample_blood_reports folder
+          const pdfBuffer = readSamplePDF(reportIdx + config.userReports);
+          let reportUrl: string;
+          let reportImageUrl: string | undefined;
+
+          if (pdfBuffer) {
+            // Upload PDF using API and get signed URL
+            const pdfFileName = `${reportId}.pdf`;
+            reportUrl = await uploadFileAndGetUrl(pdfBuffer, member.phoneNumber, pdfFileName, 'application/pdf');
+            
+            // Optionally add an image from sample_blood_report_images
+            const imageBuffer = readSampleImage(reportIdx + config.userReports);
+            if (imageBuffer) {
+              const imageFileName = `${reportId}_image.png`;
+              reportImageUrl = await uploadFileAndGetUrl(imageBuffer, member.phoneNumber, imageFileName, 'image/png');
+            }
+          } else {
+            // Fallback to placeholder if no sample PDF available
+            reportUrl = `https://placeholder.s3.amazonaws.com/reports/${member.phoneNumber}/${reportId}.pdf`;
           }
 
-          // Upload to S3 (or get placeholder)
-          const reportUrl = await uploadPDFToS3(pdfBuffer, member.phoneNumber, reportId);
-
           // Create report document
-          const reportDoc = {
+          const reportDoc: any = {
             userId: member.phoneNumber,
             userName: `${member.firstName} ${member.lastName}`,
             reportId: reportId,
@@ -916,6 +1227,12 @@ const generateData = async () => {
             remarks: '',
           };
 
+          // Add image URL if available
+          if (reportImageUrl) {
+            reportDoc.reportImage = reportImageUrl;
+            reportDoc.reportImages = [reportImageUrl];
+          }
+
           await db.collection('reports').insertOne(reportDoc);
 
           // Add report to member's profile reports array
@@ -926,75 +1243,120 @@ const generateData = async () => {
         }
       }
 
-      // Link DC shared reports (pending)
+      // Share DC reports using curl API (pending)
       if (dcReports.length > 0 && config.dcPending > 0) {
+        console.log(`      🔗 Sharing ${config.dcPending} DC reports (pending)...`);
         for (let i = 0; i < config.dcPending && dcReportIndex < dcReports.length; i++) {
           const dcReport = dcReports[dcReportIndex % dcReports.length];
           dcReportIndex++;
 
-          if (!dcReport.sharedReportDetails) {
-            dcReport.sharedReportDetails = [];
-          }
-
-          const existingShare = dcReport.sharedReportDetails.find(
-            (share: any) => share.userContact === phoneNumber
-          );
-
-          if (!existingShare) {
-            dcReport.sharedReportDetails.push({
-              userContact: phoneNumber,
-              userId: null,
-              accepted: false,
-              blocked: false,
-              rejected: false,
-              sharedAt: randomDate(oneYearAgo, now),
-            });
-
-            await db.collection('reports').updateOne(
-              { _id: dcReport._id },
-              { $set: { sharedReportDetails: dcReport.sharedReportDetails } }
-            );
+          // Use curl API to share report
+          const reportId = dcReport._id?.toString() || dcReport.reportId || dcReport.id;
+          if (reportId) {
+            const shared = await shareDCReport(reportId, phoneNumber);
+            if (shared) {
+              // Wait a bit for the share to be processed
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
           }
         }
       }
 
-      // Link DC shared reports (accepted)
+      // Share DC reports using curl API (accepted)
       if (dcReports.length > 0 && config.dcAccepted > 0) {
+        console.log(`      🔗 Sharing ${config.dcAccepted} DC reports (accepted)...`);
         for (let i = 0; i < config.dcAccepted && dcReportIndex < dcReports.length; i++) {
           const dcReport = dcReports[dcReportIndex % dcReports.length];
           dcReportIndex++;
 
-          if (!dcReport.sharedReportDetails) {
-            dcReport.sharedReportDetails = [];
+          // Use curl API to share report
+          const reportId = dcReport._id?.toString() || dcReport.reportId || dcReport.id;
+          if (reportId) {
+            const shared = await shareDCReport(reportId, phoneNumber);
+            
+            // If successfully shared, mark as accepted and create a copy in user's reports
+            if (shared) {
+              try {
+                // Wait a bit for the share to be processed
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                let reportInDb;
+                try {
+                  reportInDb = await db.collection('reports').findOne({ _id: new mongoose.Types.ObjectId(reportId) });
+                } catch {
+                  // Try finding by reportId if _id doesn't work
+                  reportInDb = await db.collection('reports').findOne({ reportId: reportId });
+                }
+                
+                if (reportInDb) {
+                  // Mark as accepted in sharedReportDetails
+                  if (reportInDb.sharedReportDetails && Array.isArray(reportInDb.sharedReportDetails)) {
+                    const shareIndex = reportInDb.sharedReportDetails.findIndex(
+                      (share: any) => share.userContact === phoneNumber
+                    );
+                    if (shareIndex >= 0) {
+                      reportInDb.sharedReportDetails[shareIndex].accepted = true;
+                      reportInDb.sharedReportDetails[shareIndex].userId = String(userProfileId);
+                      reportInDb.sharedReportDetails[shareIndex].sharedAt = new Date();
+                      
+                      const updateFilter = reportInDb._id ? { _id: reportInDb._id } : { reportId: reportId };
+                      await db.collection('reports').updateOne(
+                        updateFilter,
+                        { $set: { sharedReportDetails: reportInDb.sharedReportDetails } }
+                      );
+                    }
+                  }
+                  
+                  // Create a copy of the accepted DC report in user's reports collection
+                  // This ensures it's visible in the user's reports
+                  const acceptedReportDoc: any = {
+                    userId: phoneNumber,
+                    userName: userName,
+                    reportId: `DC-${reportId}-${Date.now()}`,
+                    originalReportId: reportId, // Reference to original DC report
+                    reportUrl: reportInDb.reportData?.url || reportInDb.reportData?.pdfUrl || reportInDb.reportUrl,
+                    reportDoc: reportInDb.reportData?.url || reportInDb.reportData?.pdfUrl || reportInDb.reportUrl,
+                    name: reportInDb.reportData?.reportName || reportInDb.testName || 'DC Shared Report',
+                    type: 'Blood Report',
+                    testName: reportInDb.reportData?.reportName || reportInDb.testName || 'DC Shared Report',
+                    documentType: 'Blood Report',
+                    reportDate: reportInDb.reportData?.reportDate ? new Date(reportInDb.reportData.reportDate) : new Date(),
+                    uploadDate: new Date(),
+                    uploadedAt: new Date(),
+                    status: 'accepted',
+                    createdBy: phoneNumber,
+                    updatedBy: phoneNumber,
+                    sharedWith: [],
+                    parsedData: reportInDb.reportData?.parsedData?.parameters || [],
+                    parameters: reportInDb.reportData?.parsedData?.parameters || reportInDb.parameters || [],
+                    parametersScanned: reportInDb.reportData?.parsedData?.parameters ? true : false,
+                    conditions: [],
+                    description: `DC shared report accepted from ${reportInDb.diagnosticCenter?.diagnostic?.name || 'Diagnostic Center'}`,
+                    remarks: '',
+                    diagnosticCenter: reportInDb.diagnosticCenter?.diagnostic?.id || reportInDb.diagnosticCenter?.diagnostic?.name,
+                    reportImage: reportInDb.reportData?.imageUrl,
+                    reportImages: reportInDb.reportData?.parsedData?.components?.map((c: any) => c.images || []).flat() || [],
+                  };
+
+                  await db.collection('reports').insertOne(acceptedReportDoc);
+                  
+                  // Add to user's reports array in profile
+                  await db.collection('profiles').updateOne(
+                    { _id: userProfileId },
+                    { $push: { reports: acceptedReportDoc } }
+                  );
+                }
+              } catch (error) {
+                console.warn(`      ⚠️  Could not process accepted DC report ${reportId}:`, error);
+              }
+            }
           }
-
-          const existingShareIndex = dcReport.sharedReportDetails.findIndex(
-            (share: any) => share.userContact === phoneNumber
-          );
-
-          if (existingShareIndex >= 0) {
-            dcReport.sharedReportDetails[existingShareIndex].accepted = true;
-            dcReport.sharedReportDetails[existingShareIndex].userId = String(userProfileId);
-          } else {
-            dcReport.sharedReportDetails.push({
-              userContact: phoneNumber,
-              userId: String(userProfileId),
-              accepted: true,
-              blocked: false,
-              rejected: false,
-              sharedAt: randomDate(oneYearAgo, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
-            });
-          }
-
-          await db.collection('reports').updateOne(
-            { _id: dcReport._id },
-            { $set: { sharedReportDetails: dcReport.sharedReportDetails } }
-          );
         }
       }
 
       // Create user-shared reports (reports shared from this user to other users)
       if (config.userShared > 0 && userReports.length > 0 && createdUsers.length > 1) {
+        console.log(`      📤 Sharing ${config.userShared} user reports...`);
         for (let i = 0; i < config.userShared && i < userReports.length; i++) {
           const reportToShare = userReports[i];
           // Share with a random other user
@@ -1030,6 +1392,37 @@ const generateData = async () => {
                   },
                 }
               );
+
+              // Also create a reference copy in target user's reports for visibility
+              // This ensures shared reports are visible in the reports list
+              const sharedReportRef: any = {
+                ...reportDoc,
+                _id: undefined, // Remove original _id to create new document
+                userId: targetUser.phoneNumber,
+                userName: `${targetUser.firstName} ${targetUser.lastName}`,
+                reportId: `SHARED-${reportToShare.reportId}-${Date.now()}`,
+                originalReportId: reportToShare.reportId, // Reference to original report
+                sharedAt: shareDate,
+                status: 'accepted',
+                description: `Report shared by ${userName} (${phoneNumber})`,
+                createdBy: phoneNumber,
+              };
+
+              // Insert the shared report reference
+              const sharedRefResult = await db.collection('reports').insertOne(sharedReportRef);
+              
+              // Add to target user's profile reports array
+              await db.collection('profiles').updateOne(
+                { _id: targetUser._id },
+                {
+                  $push: {
+                    reports: {
+                      ...sharedReportRef,
+                      _id: sharedRefResult.insertedId,
+                    },
+                  },
+                }
+              );
             }
           }
         }
@@ -1041,13 +1434,15 @@ const generateData = async () => {
     // Summary
     console.log('🎉 Data generation completed successfully!');
     console.log(`\n📊 Summary:`);
-    console.log(`   - Users: ${createdUsers.length} (phone +15555550101 to +15555550120)`);
+    console.log(`   - Users: ${createdUsers.length} (phone +15555550101 to +15555550105)`);
     console.log(`   - Family Members: ${createdMembers.length} (varying per user)`);
-    console.log(`   - All users have BMI, Food Allergies, and Diagnosed Conditions data`);
+    console.log(`   - All users have BMI, MUAC, Food Allergies, and Diagnosed Conditions data`);
     console.log(`   - Pediatric members have BMI, MUAC, Anthropometric, and IAP Growth Charts data`);
+    console.log(`   - All users have vaccination schedule initialized with completed doses as null`);
     console.log(`   - All data is backdated over 1 year period`);
-    console.log(`   - DC Shared Reports linked from actual DC data`);
+    console.log(`   - DC Shared Reports fetched using API and shared via curl`);
     console.log(`   - User-shared reports created between users`);
+    console.log(`   - Reports use sample PDFs and images from sample_blood_reports and sample_blood_report_images folders`);
     
     if (dcReports.length === 0) {
       console.log(`\n⚠️  Note: DC reports were not found in the database.`);
