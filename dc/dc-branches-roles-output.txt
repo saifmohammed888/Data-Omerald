@@ -1,0 +1,386 @@
+🔌 Connecting to MongoDB...
+✅ Connected to MongoDB
+
+📋 Found 6 Diagnostic Centers
+
+====================================================================================================
+
+====================================================================================================
+🏥 DIAGNOSTIC CENTER #1: Global Hospitals Lab Kolkata
+   Email: globalhospitalslabkolkata@example.com
+   Phone: +15555550102
+   Owner ID: 6951089f6e474a6851ab3d7b
+   Owner: Harshith Agarwal (+15555550101)
+
+   📍 BRANCHES (1):
+   ------------------------------------------------------------------------------------------------
+
+   📍 Branch 1: Global Hospitals Lab Kolkata - Main Branch
+      Address: 1, Electronic City Lane, Bangalore, Karnataka 560001
+      Email: main@globalhospitalslabkolkata.com
+      Contact: +15555550103
+      Status: active
+
+      👥 USERS (3):
+      Username                            | Phone Number       | Role
+      ----------------------------------- | ------------------ | ----------
+      Harshith Agarwal                    | +15555550101       | owner
+      Chandana Shah                       | +15555550103       | admin
+      Rohit Banerjee                      | +15555550104       | manager
+
+      👨‍⚕️  PATHOLOGISTS (1):
+         • Dr. Rohan Gopal - Chief Pathologist
+
+====================================================================================================
+🏥 DIAGNOSTIC CENTER #2: Fortis PathLabs Kolkata
+   Email: fortispathlabskolkata@example.com
+   Phone: +15555550104
+   Owner ID: 6951089f6e474a6851ab3d7b
+   Owner: Harshith Agarwal (+15555550101)
+
+   📍 BRANCHES (1):
+   ------------------------------------------------------------------------------------------------
+
+   📍 Branch 1: Fortis PathLabs Kolkata - Main Branch
+      Address: 17, OMR Cross, Chennai, Tamil Nadu 600001
+      Email: main@fortispathlabskolkata.com
+      Contact: +15555550105
+      Status: active
+
+      👥 USERS (3):
+      Username                            | Phone Number       | Role
+      ----------------------------------- | ------------------ | ----------
+      Harshith Agarwal                    | +15555550101       | owner
+      Jyothi Joshi                        | +15555550105       | admin
+      Harshith Agarwal                    | +15555550106       | manager
+
+      👨‍⚕️  PATHOLOGISTS (1):
+         • Dr. Anil Raju - Chief Pathologist
+
+====================================================================================================
+🏥 DIAGNOSTIC CENTER #3: Medanta Labs Kolkata
+   Email: medantalabskolkata@example.com
+   Phone: +15555550106
+   Owner ID: 6951089f6e474a6851ab3d7b
+   Owner: Harshith Agarwal (+15555550101)
+
+   📍 BRANCHES (1):
+   ------------------------------------------------------------------------------------------------
+
+   📍 Branch 1: Medanta Labs Kolkata - Main Branch
+      Address: 16, Hinjewadi Lane, Pune, Maharashtra 411001
+      Email: main@medantalabskolkata.com
+      Contact: +15555550107
+      Status: active
+
+      👥 USERS (3):
+      Username                            | Phone Number       | Role
+      ----------------------------------- | ------------------ | ----------
+      Harshith Agarwal                    | +15555550101       | owner
+      Anil Krishna                        | +15555550107       | admin
+      Raju Nayak                          | +15555550108       | manager
+
+      👨‍⚕️  PATHOLOGISTS (1):
+         • Dr. Shiva Mittal - Senior Pathologist
+
+====================================================================================================
+🏥 DIAGNOSTIC CENTER #4: Rainbow Hospitals Lab Ahmedabad
+   Email: rainbowhospitalslab@example.com
+   Phone: +15555550108
+   Owner ID: 6951089f6e474a6851ab3d7c
+   Owner: Radha Krishna (+15555550102)
+
+   📍 BRANCHES (1):
+   ------------------------------------------------------------------------------------------------
+
+   📍 Branch 1: Rainbow Hospitals Lab Ahmedabad - Central Lab
+      Address: 64, Navrangpura Circle, Ahmedabad, Gujarat 380001
+      Email: central@rainbowhospitalslab.com
+      Contact: +15555550109
+      Status: active
+
+      👥 USERS (8):
+      Username                            | Phone Number       | Role
+      ----------------------------------- | ------------------ | ----------
+      Radha Krishna                       | +15555550102       | spoc
+      Chandana Shah                       | +15555550103       | manager
+      Jyothi Joshi                        | +15555550105       | operator
+      Harshith Agarwal                    | +15555550106       | manager
+      Raju Nayak                          | +15555550108       | manager
+      Shilpa Swamy                        | +15555550109       | owner
+      Sneha Gopal                         | +15555550110       | admin
+      Vikram Kumar                        | +15555550111       | manager
+
+      👨‍⚕️  PATHOLOGISTS (1):
+         • Dr. Arjun Bose - Chief Pathologist
+
+====================================================================================================
+🏥 DIAGNOSTIC CENTER #5: Thyrocare Chennai
+   Email: thyrocare0@example.com
+   Phone: +15555550110
+   Owner ID: 6951089f6e474a6851ab3d7d
+   Owner: Chandana Shah (+15555550103)
+
+   📍 BRANCHES (2):
+   ------------------------------------------------------------------------------------------------
+
+   📍 Branch 1: Thyrocare Chennai - Main Branch
+      Address: 35, OMR Main Road, Chennai, Tamil Nadu 600001
+      Email: mainbranch@thyrocare.com
+      Contact: +15555550111
+      Status: active
+
+      👥 USERS (7):
+      Username                            | Phone Number       | Role
+      ----------------------------------- | ------------------ | ----------
+      Harshith Agarwal                    | +15555550101       | spoc
+      Chandana Shah                       | +15555550103       | manager
+      Shilpa Swamy                        | +15555550109       | spoc
+      Sneha Gopal                         | +15555550110       | operator
+      Harshith Varma                      | +15555550112       | owner
+      Chaitanya Chakraborty               | +15555550113       | admin
+      Vikram Verma                        | +15555550114       | manager
+
+      👨‍⚕️  PATHOLOGISTS (1):
+         • Dr. Madhuri Kapoor - Consultant Pathologist
+
+   📍 Branch 2: Thyrocare Chennai - North Branch
+      Address: 35, Velachery Main Road, Chennai, Tamil Nadu 600001
+      Email: northbranch@thyrocare.com
+      Contact: +15555550112
+      Status: active
+
+      👥 USERS (3):
+      Username                            | Phone Number       | Role
+      ----------------------------------- | ------------------ | ----------
+      Jagan Saxena                        | +15555550115       | spoc
+      Madhuri Mittal                      | +15555550116       | operator
+      Mahesh Tiwari                       | +15555550117       | manager
+
+      👨‍⚕️  PATHOLOGISTS (1):
+         • Dr. Vinod Sharma - Pathologist
+
+====================================================================================================
+🏥 DIAGNOSTIC CENTER #6: Thyrocare Chennai 1
+   Email: thyrocare1@example.com
+   Phone: +15555550113
+   Owner ID: 6951089f6e474a6851ab3d7e
+   Owner: Rohit Banerjee (+15555550104)
+
+   📍 BRANCHES (3):
+   ------------------------------------------------------------------------------------------------
+
+   📍 Branch 1: Thyrocare Chennai 1 - Main Branch
+      Address: 94, Adyar Main Road, Chennai, Tamil Nadu 600001
+      Email: mainbranch@thyrocare.com
+      Contact: +15555550114
+      Status: active
+
+      👥 USERS (6):
+      Username                            | Phone Number       | Role
+      ----------------------------------- | ------------------ | ----------
+      Rohit Banerjee                      | +15555550104       | manager
+      Jyothi Joshi                        | +15555550105       | operator
+      Anil Krishna                        | +15555550107       | spoc
+      Sai Yadav                           | +15555550118       | owner
+      Harshith Basu                       | +15555550119       | admin
+      Vijay Bhatt                         | +15555550120       | manager
+
+      👨‍⚕️  PATHOLOGISTS (1):
+         • Dr. Venkat Naidu - Consultant Pathologist
+
+   📍 Branch 2: Thyrocare Chennai 1 - North Branch
+      Address: 77, OMR Lane, Chennai, Tamil Nadu 600001
+      Email: northbranch@thyrocare.com
+      Contact: +15555550115
+      Status: active
+
+      👥 USERS (3):
+      Username                            | Phone Number       | Role
+      ----------------------------------- | ------------------ | ----------
+      Amrit Swamy                         | +15555550121       | spoc
+      Vikram Swamy                        | +15555550122       | operator
+      Eswar Chowdary                      | +15555550123       | manager
+
+      👨‍⚕️  PATHOLOGISTS (1):
+         • Dr. Mahesh Sinha - Senior Pathologist
+
+   📍 Branch 3: Thyrocare Chennai 1 - South Branch
+      Address: 28, Adyar Circle, Chennai, Tamil Nadu 600001
+      Email: southbranch@thyrocare.com
+      Contact: +15555550116
+      Status: active
+
+      👥 USERS (3):
+      Username                            | Phone Number       | Role
+      ----------------------------------- | ------------------ | ----------
+      Chandana Kumar                      | +15555550124       | spoc
+      Ritu Chakraborty                    | +15555550125       | operator
+      Rohit Verma                         | +15555550126       | manager
+
+      👨‍⚕️  PATHOLOGISTS (1):
+         • Dr. Latha Krishna - Consultant Pathologist
+
+====================================================================================================
+
+📊 Summary:
+   - Diagnostic Centers: 6
+   - Total Branches: 9
+   - Total Users: 50
+
+
+📋 Markdown Format:
+
+## Diagnostic Centers, Branches, and User Roles
+
+### 1. Global Hospitals Lab Kolkata
+- **Email:** globalhospitalslabkolkata@example.com
+- **Phone:** +15555550102
+- **Owner:** Harshith Agarwal (+15555550101)
+
+#### Branch 1: Global Hospitals Lab Kolkata - Main Branch
+- **Address:** 1, Electronic City Lane, Bangalore, Karnataka 560001
+- **Email:** main@globalhospitalslabkolkata.com
+- **Contact:** +15555550103
+
+| Username | Phone Number | Role |
+|----------|--------------|------|
+| Harshith Agarwal | +15555550101 | owner |
+| Chandana Shah | +15555550103 | admin |
+| Rohit Banerjee | +15555550104 | manager |
+
+
+### 2. Fortis PathLabs Kolkata
+- **Email:** fortispathlabskolkata@example.com
+- **Phone:** +15555550104
+- **Owner:** Harshith Agarwal (+15555550101)
+
+#### Branch 1: Fortis PathLabs Kolkata - Main Branch
+- **Address:** 17, OMR Cross, Chennai, Tamil Nadu 600001
+- **Email:** main@fortispathlabskolkata.com
+- **Contact:** +15555550105
+
+| Username | Phone Number | Role |
+|----------|--------------|------|
+| Harshith Agarwal | +15555550101 | owner |
+| Jyothi Joshi | +15555550105 | admin |
+| Harshith Agarwal | +15555550106 | manager |
+
+
+### 3. Medanta Labs Kolkata
+- **Email:** medantalabskolkata@example.com
+- **Phone:** +15555550106
+- **Owner:** Harshith Agarwal (+15555550101)
+
+#### Branch 1: Medanta Labs Kolkata - Main Branch
+- **Address:** 16, Hinjewadi Lane, Pune, Maharashtra 411001
+- **Email:** main@medantalabskolkata.com
+- **Contact:** +15555550107
+
+| Username | Phone Number | Role |
+|----------|--------------|------|
+| Harshith Agarwal | +15555550101 | owner |
+| Anil Krishna | +15555550107 | admin |
+| Raju Nayak | +15555550108 | manager |
+
+
+### 4. Rainbow Hospitals Lab Ahmedabad
+- **Email:** rainbowhospitalslab@example.com
+- **Phone:** +15555550108
+- **Owner:** Radha Krishna (+15555550102)
+
+#### Branch 1: Rainbow Hospitals Lab Ahmedabad - Central Lab
+- **Address:** 64, Navrangpura Circle, Ahmedabad, Gujarat 380001
+- **Email:** central@rainbowhospitalslab.com
+- **Contact:** +15555550109
+
+| Username | Phone Number | Role |
+|----------|--------------|------|
+| Radha Krishna | +15555550102 | spoc |
+| Chandana Shah | +15555550103 | manager |
+| Jyothi Joshi | +15555550105 | operator |
+| Harshith Agarwal | +15555550106 | manager |
+| Raju Nayak | +15555550108 | manager |
+| Shilpa Swamy | +15555550109 | owner |
+| Sneha Gopal | +15555550110 | admin |
+| Vikram Kumar | +15555550111 | manager |
+
+
+### 5. Thyrocare Chennai
+- **Email:** thyrocare0@example.com
+- **Phone:** +15555550110
+- **Owner:** Chandana Shah (+15555550103)
+
+#### Branch 1: Thyrocare Chennai - Main Branch
+- **Address:** 35, OMR Main Road, Chennai, Tamil Nadu 600001
+- **Email:** mainbranch@thyrocare.com
+- **Contact:** +15555550111
+
+| Username | Phone Number | Role |
+|----------|--------------|------|
+| Harshith Agarwal | +15555550101 | spoc |
+| Chandana Shah | +15555550103 | manager |
+| Shilpa Swamy | +15555550109 | spoc |
+| Sneha Gopal | +15555550110 | operator |
+| Harshith Varma | +15555550112 | owner |
+| Chaitanya Chakraborty | +15555550113 | admin |
+| Vikram Verma | +15555550114 | manager |
+
+#### Branch 2: Thyrocare Chennai - North Branch
+- **Address:** 35, Velachery Main Road, Chennai, Tamil Nadu 600001
+- **Email:** northbranch@thyrocare.com
+- **Contact:** +15555550112
+
+| Username | Phone Number | Role |
+|----------|--------------|------|
+| Jagan Saxena | +15555550115 | spoc |
+| Madhuri Mittal | +15555550116 | operator |
+| Mahesh Tiwari | +15555550117 | manager |
+
+
+### 6. Thyrocare Chennai 1
+- **Email:** thyrocare1@example.com
+- **Phone:** +15555550113
+- **Owner:** Rohit Banerjee (+15555550104)
+
+#### Branch 1: Thyrocare Chennai 1 - Main Branch
+- **Address:** 94, Adyar Main Road, Chennai, Tamil Nadu 600001
+- **Email:** mainbranch@thyrocare.com
+- **Contact:** +15555550114
+
+| Username | Phone Number | Role |
+|----------|--------------|------|
+| Rohit Banerjee | +15555550104 | manager |
+| Jyothi Joshi | +15555550105 | operator |
+| Anil Krishna | +15555550107 | spoc |
+| Sai Yadav | +15555550118 | owner |
+| Harshith Basu | +15555550119 | admin |
+| Vijay Bhatt | +15555550120 | manager |
+
+#### Branch 2: Thyrocare Chennai 1 - North Branch
+- **Address:** 77, OMR Lane, Chennai, Tamil Nadu 600001
+- **Email:** northbranch@thyrocare.com
+- **Contact:** +15555550115
+
+| Username | Phone Number | Role |
+|----------|--------------|------|
+| Amrit Swamy | +15555550121 | spoc |
+| Vikram Swamy | +15555550122 | operator |
+| Eswar Chowdary | +15555550123 | manager |
+
+#### Branch 3: Thyrocare Chennai 1 - South Branch
+- **Address:** 28, Adyar Circle, Chennai, Tamil Nadu 600001
+- **Email:** southbranch@thyrocare.com
+- **Contact:** +15555550116
+
+| Username | Phone Number | Role |
+|----------|--------------|------|
+| Chandana Kumar | +15555550124 | spoc |
+| Ritu Chakraborty | +15555550125 | operator |
+| Rohit Verma | +15555550126 | manager |
+
+
+
+🔌 Disconnected from MongoDB
+
+✅ Script completed successfully

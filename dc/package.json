@@ -1,0 +1,28 @@
+{
+  "name": "omerald-dc-test-data",
+  "version": "1.0.0",
+  "description": "Test data generation scripts for Omerald Diagnostic Center",
+  "type": "module",
+  "scripts": {
+    "generate": "tsx generate-data.ts",
+    "clear": "tsx clear-data.ts"
+  },
+  "keywords": [
+    "test-data",
+    "omerald",
+    "diagnostic-center"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.922.0",
+    "dotenv": "^16.0.0",
+    "mongoose": "^8.5.0",
+    "xlsx": "^0.18.5"
+  }
+}
