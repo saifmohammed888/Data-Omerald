@@ -8,6 +8,21 @@ This repository contains test data generation scripts and documentation for all 
 - **Diagnostic Center (DC) App**: [https://diagnostic.omerald.com/](https://diagnostic.omerald.com/)
 - **Admin App**: [https://admin.omerald.com/](https://admin.omerald.com/)
 
+---
+
+## ⚠️ Important Note: Clerk Registration
+
+> **Note:** Before using the test users, ensure they are registered in **Clerk** with the **same name** as shown in the test data tables below. The phone numbers must match exactly, and the first and last names should be extracted from the `userName` field in the data.
+>
+> **Example:** For user "Arjun Rao" with phone `+15555550101`, register in Clerk with:
+> - **First Name**: Arjun
+> - **Last Name**: Rao
+> - **Phone Number**: +15555550101
+>
+> This applies to **Admin App** users. User App and DC App users may have different authentication requirements.
+
+---
+
 ## 📋 Quick Navigation
 
 - [Test Users](#test-users)
