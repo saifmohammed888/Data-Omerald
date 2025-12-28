@@ -2,7 +2,7 @@
  * Backdated Data Generation Script for Omerald Admin
  * 
  * Generates a year's worth of realistic backdated sample data including:
- * - 100 Users (25 per role: admin, manager, sme, legal)
+ * - 10 Users (3 admin, 3 manager, 2 sme, 2 legal - all role combinations)
  * - Reports with parameters and components
  * - Parameters with bio reference ranges
  * - Samples
@@ -71,16 +71,16 @@ const START_DATE = new Date();
 START_DATE.setFullYear(START_DATE.getFullYear() - YEARS_BACK);
 START_DATE.setMonth(0, 1); // January 1st
 
-const TOTAL_USERS = 100;
-const USERS_PER_ROLE = 25;
+const TOTAL_USERS = 10;
 const PHONE_START = 101; // +1555 555 0101
-const PHONE_END = 200;   // +1555 555 0200
+const PHONE_END = 110;   // +1555 555 0110
 
 // Roles
 const ROLES = ['admin', 'manager', 'sme', 'legal'] as const;
 type Role = typeof ROLES[number];
 
-// Manual validation users (first 10 - easy to remember, using Telugu names)
+// Manual validation users (10 users with all role combinations - easy to remember, using Telugu names)
+// Distribution: 3 admin, 3 manager, 2 sme, 2 legal (ensures all roles are well represented)
 const MANUAL_VALIDATION_NAMES = [
   { firstName: 'Arjun', lastName: 'Rao', role: 'admin' as Role },
   { firstName: 'Priya', lastName: 'Reddy', role: 'manager' as Role },
@@ -461,7 +461,7 @@ const generateData = async () => {
     console.log('🧹 Cleaning up existing test data...');
     try {
       const deleteResults = await Promise.all([
-        db.collection('users').deleteMany({ phoneNumber: { $regex: /^\+1555555(010[1-9]|01[1-9][0-9]|0200)$/ } }),
+        db.collection('users').deleteMany({ phoneNumber: { $regex: /^\+1555555(010[1-9]|0110)$/ } }),
         db.collection('activities').deleteMany({}),
         db.collection('reports').deleteMany({}),
         db.collection('parameters').deleteMany({}),
@@ -649,42 +649,40 @@ const generateData = async () => {
     }
     userDates.sort((a, b) => a.getTime() - b.getTime());
 
-    let userIndex = 0;
-    for (const role of ROLES) {
-      for (let i = 0; i < USERS_PER_ROLE; i++) {
-        const phoneNum = PHONE_START + userIndex;
-        const phoneNumber = formatPhoneNumber(phoneNum);
-        const userName = generateUserName(userIndex, role);
-        const { firstName, lastName } = parseName(userName);
-        const createdAt = userDates[userIndex];
+    // Generate users based on MANUAL_VALIDATION_NAMES (ensures all role combinations)
+    for (let userIndex = 0; userIndex < TOTAL_USERS; userIndex++) {
+      const userInfo = MANUAL_VALIDATION_NAMES[userIndex];
+      const phoneNum = PHONE_START + userIndex;
+      const phoneNumber = formatPhoneNumber(phoneNum);
+      const userName = `${userInfo.firstName} ${userInfo.lastName}`;
+      const { firstName, lastName } = userInfo;
+      const createdAt = userDates[userIndex];
+      const role = userInfo.role;
 
-        // Create user in database using native driver
-        const userDoc = {
-          role,
-          userName,
-          phoneNumber,
-          createdAt,
-          deletedAt: null,
-        };
-        const userResult = await db.collection('users').insertOne(userDoc);
-        const user = {
-          _id: userResult.insertedId,
-          ...userDoc,
-        };
-        users.push(user);
+      // Create user in database using native driver
+      const userDoc = {
+        role,
+        userName,
+        phoneNumber,
+        createdAt,
+        deletedAt: null,
+      };
+      const userResult = await db.collection('users').insertOne(userDoc);
+      const user = {
+        _id: userResult.insertedId,
+        ...userDoc,
+      };
+      users.push(user);
 
-        // Optionally create in Clerk
-        // if (clerkClient) {
-        //   const created = await createClerkUser(phoneNumber, firstName, lastName);
-        //   if (created) {
-        //     clerkUsersCreated.push({ phoneNumber, userName });
-        //   } else {
-        //     clerkUsersFailed.push({ phoneNumber, userName });
-        //   }
-        // }
-
-        userIndex++;
-      }
+      // Optionally create in Clerk
+      // if (clerkClient) {
+      //   const created = await createClerkUser(phoneNumber, firstName, lastName);
+      //   if (created) {
+      //     clerkUsersCreated.push({ phoneNumber, userName });
+      //   } else {
+      //     clerkUsersFailed.push({ phoneNumber, userName });
+      //   }
+      // }
     }
 
     console.log(`✅ Created ${users.length} users\n`);
@@ -806,7 +804,13 @@ const generateData = async () => {
     console.log(`   - Parameters: ${insertedParameters.length}`);
     console.log(`   - Diagnosed Conditions: ${insertedConditions.length}`);
     console.log(`   - Reports: ${insertedReports.length}`);
-    console.log(`   - Users: ${users.length} (${USERS_PER_ROLE} per role)`);
+    // Count users by role
+    const roleCounts = users.reduce((acc, user) => {
+      acc[user.role] = (acc[user.role] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const roleSummary = ROLES.map(role => `${roleCounts[role] || 0} ${role}`).join(', ');
+    console.log(`   - Users: ${users.length} (${roleSummary})`);
     console.log(`   - Activities: ${insertedActivities.length}`);
     console.log(`   - Settings: 2 (User & Diagnostic)\n`);
 

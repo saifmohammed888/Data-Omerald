@@ -5,7 +5,7 @@ This directory contains scripts for generating and managing test data for the Om
 ## Overview
 
 These scripts generate a year's worth of realistic backdated sample data including:
-- **100 Users** (25 per role: admin, manager, sme, legal)
+- **10 Users** (3 admin, 3 manager, 2 sme, 2 legal - all role combinations)
 - **Reports** with parameters and components
 - **Parameters** with bio reference ranges
 - **Samples**, **Vaccines**, **Doses**, **Durations**
@@ -95,31 +95,31 @@ The script will:
 
 Test data uses phone numbers in the range:
 - **Start**: `+15555550101` (displayed as `+1555 555 0101`)
-- **End**: `+15555550200` (displayed as `+1555 555 0200`)
-- **Total**: 100 users
+- **End**: `+15555550110` (displayed as `+1555 555 0110`)
+- **Total**: 10 users
 - **Format**: Stored without spaces (`+15555550101`) for Clerk and MongoDB compatibility
 
 ### Role Distribution
 
-- **admin**: Phone numbers ending 0101-0125 (25 users)
-- **manager**: Phone numbers ending 0126-0150 (25 users)
-- **sme**: Phone numbers ending 0151-0175 (25 users)
-- **legal**: Phone numbers ending 0176-0200 (25 users)
+- **admin**: Phone numbers ending 0101, 0105, 0109 (3 users)
+- **manager**: Phone numbers ending 0102, 0106, 0110 (3 users)
+- **sme**: Phone numbers ending 0103, 0107 (2 users)
+- **legal**: Phone numbers ending 0104, 0108 (2 users)
 
-### Manual Validation Users (First 10)
+### Manual Validation Users (All 10)
 
-Easy-to-remember users for manual testing:
+Easy-to-remember users for manual testing with all role combinations:
 
-1. Admin User (+15555550101) - admin
-2. Manager User (+15555550126) - manager
-3. SME User (+15555550151) - sme
-4. Legal User (+15555550176) - legal
-5. John Doe (+15555550105) - admin
-6. Jane Smith (+15555550130) - manager
-7. Bob Johnson (+15555550155) - sme
-8. Alice Williams (+15555550180) - legal
-9. Charlie Brown (+15555550109) - admin
-10. Diana Davis (+15555550134) - manager
+1. Arjun Rao (+15555550101) - admin
+2. Priya Reddy (+15555550102) - manager
+3. Karthik Naidu (+15555550103) - sme
+4. Lakshmi Kumar (+15555550104) - legal
+5. Rahul Sharma (+15555550105) - admin
+6. Kavya Prasad (+15555550106) - manager
+7. Vikram Murthy (+15555550107) - sme
+8. Sneha Raju (+15555550108) - legal
+9. Sai Krishna (+15555550109) - admin
+10. Divya Swamy (+15555550110) - manager
 
 **Note**: Phone numbers are stored without spaces in the database. When logging in with Clerk, use the format: `+15555550101`
 

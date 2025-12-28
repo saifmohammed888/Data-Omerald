@@ -110,3 +110,4 @@ npx tsx clear-data.ts && npx tsx generate-data.ts
 - Reports use realistic health industry parameters
 - Parameters are reused across different tests for consistency
 
+

@@ -1,14 +1,15 @@
 /**
- * Generate Backdated Test Data for Omerald User App
+ * Generate Comprehensive Test Data for Omerald User App
  * 
- * Generates comprehensive test data including:
- * - 10 Users (phone +15555550101 to +15555550120) with Telugu Indian names
- * - 5 Family Members per user (father, mother, son, brother, sister, etc.)
- * - User-uploaded reports (PDFs) for users and members
- * - DC shared reports (pending and accepted) - integrated with DC data
- * - Real PDF reports (blood tests, medical reports) uploaded to S3
- * - Backdated data over the past year
- * - 3-5 manual test records
+ * Generates 10 users with different combinations:
+ * - Varying numbers of family members (0-5)
+ * - Varying numbers of user-uploaded reports (0-10+)
+ * - Varying numbers of DC shared reports (pending/accepted)
+ * - User-shared reports (reports shared between users)
+ * - All member fields: BMI, MUAC, Anthropometric, IAP Growth Charts, Food Allergies, Diagnosed Conditions
+ * - Pediatric members with complete pediatric data
+ * - All data backdated over 1 year
+ * - Real DC reports from diagnostic centers
  * 
  * Usage:
  *   npx tsx generate-data.ts
@@ -51,11 +52,23 @@ let Profile: any, Reports: any;
 const PHONE_START = 101; // +15555550101
 const PHONE_END = 120;   // +15555550120
 const TOTAL_USERS = 10;
-const MEMBERS_PER_USER = 5;
-const USER_UPLOADED_REPORTS_PER_USER = 3; // Reports uploaded by user
-const USER_UPLOADED_REPORTS_PER_MEMBER = 2; // Reports uploaded for each member
-const DC_SHARED_REPORTS_PER_USER = 2; // Pending DC shared reports
-const DC_ACCEPTED_REPORTS_PER_USER = 2; // Accepted DC shared reports
+
+// Performance optimization: Skip PDF generation (use placeholder URLs)
+const SKIP_PDF_GENERATION = true; // Set to false to generate actual PDFs
+
+// User combinations configuration - each user gets different data
+const USER_CONFIGS = [
+  { members: 0, userReports: 5, memberReports: 0, dcPending: 0, dcAccepted: 0, userShared: 0 }, // User 1: Reports only, no members
+  { members: 3, userReports: 0, memberReports: 6, dcPending: 2, dcAccepted: 0, userShared: 0 }, // User 2: Members only, pending DC
+  { members: 5, userReports: 3, memberReports: 10, dcPending: 2, dcAccepted: 2, userShared: 1 }, // User 3: Full setup
+  { members: 2, userReports: 1, memberReports: 4, dcPending: 1, dcAccepted: 1, userShared: 0 }, // User 4: Minimal
+  { members: 0, userReports: 0, memberReports: 0, dcPending: 3, dcAccepted: 0, userShared: 0 }, // User 5: DC pending only
+  { members: 1, userReports: 10, memberReports: 2, dcPending: 0, dcAccepted: 3, userShared: 2 }, // User 6: Many reports, accepted DC
+  { members: 4, userReports: 2, memberReports: 8, dcPending: 0, dcAccepted: 0, userShared: 1 }, // User 7: No DC reports
+  { members: 3, userReports: 4, memberReports: 6, dcPending: 1, dcAccepted: 2, userShared: 0 }, // User 8: Mixed
+  { members: 5, userReports: 0, memberReports: 0, dcPending: 0, dcAccepted: 0, userShared: 0 }, // User 9: Members only, no reports
+  { members: 2, userReports: 8, memberReports: 4, dcPending: 2, dcAccepted: 1, userShared: 1 }, // User 10: Many user reports
+];
 
 // Indian Telugu names
 const FIRST_NAMES = [
@@ -115,6 +128,19 @@ const REPORT_TYPES = [
   'Stool Examination',
 ];
 
+// Diagnosed conditions
+const CONDITIONS = [
+  'Diabetes Type 2', 'Hypertension', 'Anemia', 'Hypothyroidism', 'Hyperthyroidism',
+  'High Cholesterol', 'Vitamin D Deficiency', 'Vitamin B12 Deficiency', 'Iron Deficiency',
+  'Asthma', 'Arthritis', 'Osteoporosis', 'Kidney Disease', 'Liver Disease',
+];
+
+// Food allergies
+const FOOD_ALLERGIES = [
+  'Peanuts', 'Milk', 'Eggs', 'Soy', 'Wheat', 'Fish', 'Shellfish', 'Tree Nuts',
+  'Gluten', 'Lactose', 'Sesame', 'Mustard',
+];
+
 // Indian cities
 const CITIES = [
   { city: 'Hyderabad', state: 'Telangana', pincode: '500001' },
@@ -128,7 +154,7 @@ const CITIES = [
 ];
 
 // Helper functions
-const formatPhoneNumber = (num: number): string => `+1555555${String(num).padStart(3, '0')}`;
+const formatPhoneNumber = (num: number): string => `+1555555${String(num).padStart(4, '0')}`;
 
 const randomElement = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
@@ -138,6 +164,10 @@ const randomDate = (start: Date, end: Date): Date => {
 
 const randomInt = (min: number, max: number): number => {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+
+const randomFloat = (min: number, max: number, decimals: number = 2): number => {
+  return parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
 };
 
 const generateEmail = (firstName: string, lastName: string, index: number): string => {
@@ -154,6 +184,19 @@ const generateUserName = (index: number): string => {
   const firstName = FIRST_NAMES[index % FIRST_NAMES.length];
   const lastName = LAST_NAMES[Math.floor(index / FIRST_NAMES.length) % LAST_NAMES.length];
   return `${firstName} ${lastName}`;
+};
+
+// Calculate age from DOB
+const calculateAge = (dob: Date): number => {
+  return Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+};
+
+// Calculate age in months for pediatric
+const calculateAgeInMonths = (dob: Date): number => {
+  const now = new Date();
+  const years = now.getFullYear() - dob.getFullYear();
+  const months = now.getMonth() - dob.getMonth();
+  return years * 12 + months;
 };
 
 // Initialize S3 client
@@ -272,11 +315,14 @@ const generateTestResults = (reportType: string): Array<{ parameter: string; val
   ];
 };
 
-// Upload PDF to S3
-const uploadPDFToS3 = async (pdfBuffer: Buffer, userId: string, reportId: string): Promise<string> => {
+// Upload PDF to S3 (or return placeholder if skipped)
+const uploadPDFToS3 = async (pdfBuffer: Buffer | null, userId: string, reportId: string): Promise<string> => {
+  if (SKIP_PDF_GENERATION || !pdfBuffer) {
+    return `https://placeholder.s3.amazonaws.com/reports/${userId}/${reportId}.pdf`;
+  }
+
   const s3Client = getS3Client();
   if (!s3Client) {
-    // Return placeholder URL if S3 is not configured
     return `https://placeholder.s3.amazonaws.com/reports/${userId}/${reportId}.pdf`;
   }
 
@@ -294,8 +340,229 @@ const uploadPDFToS3 = async (pdfBuffer: Buffer, userId: string, reportId: string
     return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${fileName}`;
   } catch (error) {
     console.error(`Error uploading PDF to S3: ${error}`);
-    throw error;
+    return `https://placeholder.s3.amazonaws.com/reports/${userId}/${reportId}.pdf`;
   }
+};
+
+// Generate BMI data (backdated over 1 year) - Reduced for performance
+const generateBMIData = (dob: Date, isPediatric: boolean): any[] => {
+  const bmiData: any[] = [];
+  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const age = calculateAge(dob);
+  
+  // Generate 2-3 BMI records over the past year (reduced for performance)
+  const numRecords = randomInt(2, 3);
+  const dates = [];
+  for (let i = 0; i < numRecords; i++) {
+    dates.push(randomDate(oneYearAgo, now));
+  }
+  dates.sort((a, b) => a.getTime() - b.getTime());
+
+  dates.forEach((date) => {
+    let height, weight, bmi;
+    if (isPediatric) {
+      // Pediatric: height in cm, weight in kg
+      const ageInMonths = calculateAgeInMonths(dob);
+      if (ageInMonths < 12) {
+        height = randomFloat(50, 75, 1); // 0-12 months
+        weight = randomFloat(3, 10, 2);
+      } else if (ageInMonths < 24) {
+        height = randomFloat(75, 85, 1); // 12-24 months
+        weight = randomFloat(10, 12, 2);
+      } else if (ageInMonths < 60) {
+        height = randomFloat(85, 110, 1); // 2-5 years
+        weight = randomFloat(12, 20, 2);
+      } else {
+        height = randomFloat(110, 150, 1); // 5+ years
+        weight = randomFloat(20, 40, 2);
+      }
+      bmi = weight / ((height / 100) ** 2);
+    } else {
+      // Adult: height in cm, weight in kg
+      height = randomFloat(150, 185, 1);
+      weight = randomFloat(50, 90, 1);
+      bmi = weight / ((height / 100) ** 2);
+    }
+
+    bmiData.push({
+      height: Math.round(height),
+      weight: Math.round(weight * 10) / 10,
+      bmi: Math.round(bmi * 10) / 10,
+      updatedDate: date,
+      comment: [],
+    });
+  });
+
+  return bmiData;
+};
+
+// Generate MUAC data (for pediatric only, backdated over 1 year) - Reduced for performance
+const generateMUACData = (dob: Date): any[] => {
+  const muacData: any[] = [];
+  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const ageInMonths = calculateAgeInMonths(dob);
+  
+  // Generate 1-2 MUAC records (reduced for performance)
+  const numRecords = randomInt(1, 2);
+  const dates = [];
+  for (let i = 0; i < numRecords; i++) {
+    dates.push(randomDate(oneYearAgo, now));
+  }
+  dates.sort((a, b) => a.getTime() - b.getTime());
+
+  dates.forEach((date) => {
+    // MUAC in cm (Mid-Upper Arm Circumference)
+    // Normal range: 12.5-16.5 cm for children
+    let height;
+    if (ageInMonths < 12) {
+      height = randomFloat(11, 14, 1);
+    } else if (ageInMonths < 24) {
+      height = randomFloat(12, 15, 1);
+    } else if (ageInMonths < 60) {
+      height = randomFloat(13, 16, 1);
+    } else {
+      height = randomFloat(14, 17, 1);
+    }
+
+    muacData.push({
+      height: Math.round(height * 10) / 10,
+      updatedDate: date,
+      comment: [],
+    });
+  });
+
+  return muacData;
+};
+
+// Generate Anthropometric data (for pediatric only, backdated over 1 year) - Reduced for performance
+const generateAnthropometricData = (dob: Date): any[] => {
+  const anthroData: any[] = [];
+  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  
+  // Generate 1-2 records (reduced for performance)
+  const numRecords = randomInt(1, 2);
+  const dates = [];
+  for (let i = 0; i < numRecords; i++) {
+    dates.push(randomDate(oneYearAgo, now));
+  }
+  dates.sort((a, b) => a.getTime() - b.getTime());
+
+  dates.forEach((date) => {
+    // Anthropometric measurement (can be head circumference, chest circumference, etc.)
+    // Using head circumference as example (normal: 33-38 cm for infants, 48-52 cm for toddlers)
+    const ageInMonths = calculateAgeInMonths(dob);
+    let measurement;
+    if (ageInMonths < 12) {
+      measurement = randomFloat(33, 38, 1);
+    } else if (ageInMonths < 24) {
+      measurement = randomFloat(38, 45, 1);
+    } else {
+      measurement = randomFloat(45, 52, 1);
+    }
+
+    anthroData.push({
+      anthopometric: Math.round(measurement * 10) / 10,
+      updatedDate: date,
+      comment: [],
+    });
+  });
+
+  return anthroData;
+};
+
+// Generate IAP Growth Charts data (for pediatric only, backdated over 1 year) - Reduced for performance
+const generateIAPGrowthChartsData = (dob: Date): any[] => {
+  const iapData: any[] = [];
+  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  
+  // Generate 2-4 records (reduced for performance)
+  const numRecords = randomInt(2, 4);
+  const dates = [];
+  for (let i = 0; i < numRecords; i++) {
+    dates.push(randomDate(oneYearAgo, now));
+  }
+  dates.sort((a, b) => a.getTime() - b.getTime());
+
+  dates.forEach((date) => {
+    const ageInMonths = calculateAgeInMonths(dob);
+    const ageAtDate = Math.floor((date.getTime() - dob.getTime()) / (30.44 * 24 * 60 * 60 * 1000)); // Age in months at that date
+    
+    let weight, height;
+    if (ageAtDate < 12) {
+      weight = randomFloat(3, 10, 2);
+      height = randomFloat(50, 75, 1);
+    } else if (ageAtDate < 24) {
+      weight = randomFloat(10, 12, 2);
+      height = randomFloat(75, 85, 1);
+    } else if (ageAtDate < 60) {
+      weight = randomFloat(12, 20, 2);
+      height = randomFloat(85, 110, 1);
+    } else {
+      weight = randomFloat(20, 40, 2);
+      height = randomFloat(110, 150, 1);
+    }
+
+    iapData.push({
+      age: ageAtDate,
+      weight: Math.round(weight * 10) / 10,
+      height: Math.round(height),
+      date: date,
+      comment: [],
+    });
+  });
+
+  return iapData;
+};
+
+// Generate Food Allergies data (backdated over 1 year)
+const generateFoodAllergiesData = (): any[] => {
+  const allergies: any[] = [];
+  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  
+  // 0-3 food allergies
+  const numAllergies = randomInt(0, 3);
+  const selectedAllergies = [];
+  for (let i = 0; i < numAllergies; i++) {
+    const allergy = randomElement(FOOD_ALLERGIES);
+    if (!selectedAllergies.includes(allergy)) {
+      selectedAllergies.push(allergy);
+      allergies.push({
+        foodItem: allergy,
+        updatedDate: randomDate(oneYearAgo, now),
+        comment: [],
+      });
+    }
+  }
+
+  return allergies;
+};
+
+// Generate Diagnosed Conditions data (backdated over 1 year)
+const generateDiagnosedConditionsData = (): any[] => {
+  const conditions: any[] = [];
+  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  
+  // 0-2 diagnosed conditions
+  const numConditions = randomInt(0, 2);
+  const selectedConditions = [];
+  for (let i = 0; i < numConditions; i++) {
+    const condition = randomElement(CONDITIONS);
+    if (!selectedConditions.includes(condition)) {
+      selectedConditions.push(condition);
+      conditions.push({
+        condition: condition,
+        date: randomDate(oneYearAgo, now),
+      });
+    }
+  }
+
+  return conditions;
 };
 
 // Main data generation function
@@ -322,28 +589,29 @@ const generateData = async () => {
     // Clear existing test data
     console.log('🧹 Cleaning up existing test data...');
     try {
-      await Promise.all([
-        db.collection('profiles').deleteMany({ phoneNumber: { $regex: /^\+1555555(010[1-9]|01[1-9][0-9]|0120)$/ } }),
-        db.collection('reports').deleteMany({ userId: { $regex: /^\+1555555(010[1-9]|01[1-9][0-9]|0120)$/ } }),
-      ]);
-      console.log('✅ Cleanup complete\n');
+      const profilesDeleted = await db.collection('profiles').deleteMany({
+        phoneNumber: { $regex: /^\+1555555(010[1-9]|01[1-9][0-9]|01[2-6][0-9]|0170)$/ }
+      });
+      
+      const reportsDeleted = await db.collection('reports').deleteMany({
+        userId: { $regex: /^\+1555555(010[1-9]|01[1-9][0-9]|01[2-6][0-9]|0170)$/ }
+      });
+      
+      console.log(`✅ Deleted ${profilesDeleted.deletedCount} profiles and ${reportsDeleted.deletedCount} reports\n`);
     } catch (error: any) {
       console.log(`   ⚠️  Cleanup warning: ${error.message}`);
       console.log('   Continuing with data generation...\n');
     }
 
     // Fetch DC reports to link shared reports
-    // DC reports have diagnosticCenter and sharedReportDetails fields, and no userId field
     console.log('📋 Fetching DC reports for shared reports integration...');
     let dcReports: any[] = [];
     try {
-      // DC reports have diagnosticCenter field and sharedReportDetails, but no userId
-      // User reports have userId field
       dcReports = await db.collection('reports').find({
         'diagnosticCenter': { $exists: true },
         'sharedReportDetails': { $exists: true },
-        'userId': { $exists: false }, // DC reports don't have userId
-      }).limit(100).toArray();
+        'userId': { $exists: false },
+      }).limit(200).toArray();
       console.log(`✅ Found ${dcReports.length} DC reports for shared reports integration\n`);
     } catch (error) {
       console.warn(`   ⚠️  Could not fetch DC reports: ${error}`);
@@ -351,17 +619,23 @@ const generateData = async () => {
     }
 
     const s3Client = getS3Client();
-    if (!s3Client) {
+    if (SKIP_PDF_GENERATION) {
+      console.log('⚡ Performance mode: Skipping PDF generation (using placeholder URLs)\n');
+    } else if (!s3Client) {
       console.warn('⚠️  S3 not configured - PDFs will use placeholder URLs\n');
     }
 
-    // Generate users
-    console.log('👥 Creating Users and Family Members...');
+    // Generate users with different combinations
+    console.log('👥 Creating Users with Different Combinations...');
     const createdUsers: any[] = [];
     const createdMembers: any[] = [];
+    const allUserReports: any[] = []; // Store all reports for user sharing
     let dcReportIndex = 0;
+    const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    const now = new Date();
 
     for (let userIdx = 0; userIdx < TOTAL_USERS; userIdx++) {
+      const config = USER_CONFIGS[userIdx];
       const phoneNum = PHONE_START + userIdx;
       const phoneNumber = formatPhoneNumber(phoneNum);
       const userName = generateUserName(userIdx);
@@ -369,9 +643,9 @@ const generateData = async () => {
       const cityData = randomElement(CITIES);
       const gender = randomElement(['male', 'female']);
       const dob = randomDate(new Date(1970, 0, 1), new Date(2000, 11, 31));
-      const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      const age = calculateAge(dob);
 
-      // Create user profile
+      // Create user profile with all fields
       const userProfileDoc = {
         phoneNumber,
         firstName,
@@ -388,7 +662,7 @@ const generateData = async () => {
           pincode: cityData.pincode,
           type: 'home',
         },
-        createdDate: randomDate(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), new Date()),
+        createdDate: randomDate(oneYearAgo, now),
         userType: 'Primary',
         subscription: 'Free',
         members: [],
@@ -396,12 +670,12 @@ const generateData = async () => {
         sharedReports: [],
         sharedWith: [],
         sharedMembers: [],
-        diagnosedCondition: [],
+        diagnosedCondition: generateDiagnosedConditionsData(),
         healthTopics: [],
-        bmi: [],
+        bmi: generateBMIData(dob, false),
         anthopometric: [],
         muac: [],
-        foodAllergies: [],
+        foodAllergies: generateFoodAllergiesData(),
         iapGrowthCharts: [],
         notification: [],
         activities: [],
@@ -414,19 +688,19 @@ const generateData = async () => {
       const userProfileId = userProfileResult.insertedId;
       createdUsers.push({ _id: userProfileId, ...userProfileDoc });
 
-      // Create family members
-      const memberRelations = ['Father', 'Mother', 'Son', 'Brother', 'Sister'].slice(0, MEMBERS_PER_USER);
+      // Create family members based on config
+      const memberRelations = ['Father', 'Mother', 'Son', 'Daughter', 'Brother', 'Sister'].slice(0, config.members);
       const memberProfiles: any[] = [];
+      let memberPhoneCounter = PHONE_END + 1 + (userIdx * 10);
 
-      for (let memberIdx = 0; memberIdx < memberRelations.length; memberIdx++) {
+      for (let memberIdx = 0; memberIdx < config.members; memberIdx++) {
         const relation = memberRelations[memberIdx];
-        const memberPhoneNum = PHONE_END + 1 + (userIdx * MEMBERS_PER_USER) + memberIdx;
-        const memberPhoneNumber = formatPhoneNumber(memberPhoneNum);
-        const memberName = generateUserName(userIdx * MEMBERS_PER_USER + memberIdx + 100);
+        const memberPhoneNumber = formatPhoneNumber(memberPhoneCounter++);
+        const memberName = generateUserName(userIdx * 10 + memberIdx + 100);
         const [memberFirstName, memberLastName] = memberName.split(' ');
         
         // Determine gender based on relation
-        let memberGender = gender;
+        let memberGender = 'male';
         if (relation === 'Father' || relation === 'Brother' || relation === 'Son') {
           memberGender = 'male';
         } else if (relation === 'Mother' || relation === 'Sister' || relation === 'Daughter') {
@@ -437,20 +711,29 @@ const generateData = async () => {
 
         // Generate appropriate DOB based on relation
         let memberDOB: Date;
+        const isPediatric = relation === 'Son' || relation === 'Daughter';
         if (relation === 'Father' || relation === 'Mother') {
           memberDOB = randomDate(new Date(1950, 0, 1), new Date(1975, 11, 31));
-        } else if (relation === 'Son' || relation === 'Daughter') {
-          memberDOB = randomDate(new Date(2000, 0, 1), new Date(2015, 11, 31));
+        } else if (isPediatric) {
+          memberDOB = randomDate(new Date(2015, 0, 1), new Date(2023, 11, 31)); // Pediatric: 0-9 years
         } else {
           memberDOB = randomDate(new Date(1980, 0, 1), new Date(2000, 11, 31));
         }
-        const memberAge = Math.floor((Date.now() - memberDOB.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+        const memberAge = calculateAge(memberDOB);
+
+        // Generate member-specific data
+        const memberBMIData = generateBMIData(memberDOB, isPediatric);
+        const memberMUACData = isPediatric ? generateMUACData(memberDOB) : [];
+        const memberAnthroData = isPediatric ? generateAnthropometricData(memberDOB) : [];
+        const memberIAPData = isPediatric ? generateIAPGrowthChartsData(memberDOB) : [];
+        const memberFoodAllergies = generateFoodAllergiesData();
+        const memberConditions = generateDiagnosedConditionsData();
 
         const memberProfileDoc = {
           phoneNumber: memberPhoneNumber,
           firstName: memberFirstName,
           lastName: memberLastName,
-          email: generateEmail(memberFirstName, memberLastName, userIdx * MEMBERS_PER_USER + memberIdx + 100),
+          email: generateEmail(memberFirstName, memberLastName, userIdx * 10 + memberIdx + 100),
           gender: memberGender,
           bloodGroup: randomElement(BLOOD_GROUPS),
           dob: memberDOB,
@@ -462,7 +745,7 @@ const generateData = async () => {
             pincode: cityData.pincode,
             type: 'home',
           },
-          createdDate: randomDate(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), new Date()),
+          createdDate: randomDate(oneYearAgo, now),
           userType: 'Member',
           subscription: 'Free',
           members: [],
@@ -470,16 +753,16 @@ const generateData = async () => {
           sharedReports: [],
           sharedWith: [],
           sharedMembers: [],
-          diagnosedCondition: [],
+          diagnosedCondition: memberConditions,
           healthTopics: [],
-          bmi: [],
-          anthopometric: [],
-          muac: [],
-          foodAllergies: [],
-          iapGrowthCharts: [],
+          bmi: memberBMIData,
+          anthopometric: memberAnthroData,
+          muac: memberMUACData,
+          foodAllergies: memberFoodAllergies,
+          iapGrowthCharts: memberIAPData,
           notification: [],
           activities: [],
-          isPediatric: relation === 'Son' || relation === 'Daughter',
+          isPediatric: isPediatric,
           isDoctor: false,
           doctorApproved: false,
         };
@@ -506,26 +789,38 @@ const generateData = async () => {
         createdMembers.push({ _id: memberProfileId, ...memberProfileDoc, relation, userId: userProfileId });
       }
 
-      console.log(`   ✅ User ${userIdx + 1}/${TOTAL_USERS}: ${userName} with ${memberProfiles.length} members`);
+      console.log(`   ✅ User ${userIdx + 1}/${TOTAL_USERS}: ${userName} (${((userIdx + 1) / TOTAL_USERS * 100).toFixed(0)}%)`);
+      if (config.members > 0 || config.userReports > 0 || config.memberReports > 0) {
+        console.log(`      - Members: ${config.members}, User Reports: ${config.userReports}, Member Reports: ${config.memberReports}`);
+      }
+      if (config.dcPending > 0 || config.dcAccepted > 0 || config.userShared > 0) {
+        console.log(`      - DC Pending: ${config.dcPending}, DC Accepted: ${config.dcAccepted}, User Shared: ${config.userShared}`);
+      }
 
       // Generate user-uploaded reports for the user
-      console.log(`      📄 Creating ${USER_UPLOADED_REPORTS_PER_USER} user-uploaded reports for ${userName}...`);
-      for (let reportIdx = 0; reportIdx < USER_UPLOADED_REPORTS_PER_USER; reportIdx++) {
+      const userReports: any[] = [];
+      if (config.userReports > 0) {
+        console.log(`      📄 Creating ${config.userReports} user reports...`);
+      }
+      for (let reportIdx = 0; reportIdx < config.userReports; reportIdx++) {
         const reportType = randomElement(REPORT_TYPES);
-        const reportDate = randomDate(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), new Date());
+        const reportDate = randomDate(oneYearAgo, now);
         const reportId = `RPT-${userIdx}-${reportIdx}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-        // Generate PDF
-        const pdfBuffer = await generatePDFReport(
-          userName,
-          reportType,
-          reportDate,
-          age,
-          gender,
-          userProfileDoc.bloodGroup
-        );
+        // Generate PDF (skip if SKIP_PDF_GENERATION is true)
+        let pdfBuffer: Buffer | null = null;
+        if (!SKIP_PDF_GENERATION) {
+          pdfBuffer = await generatePDFReport(
+            userName,
+            reportType,
+            reportDate,
+            age,
+            gender,
+            userProfileDoc.bloodGroup
+          );
+        }
 
-        // Upload to S3
+        // Upload to S3 (or get placeholder)
         const reportUrl = await uploadPDFToS3(pdfBuffer, phoneNumber, reportId);
 
         // Create report document
@@ -554,7 +849,9 @@ const generateData = async () => {
           remarks: '',
         };
 
-        const reportResult = await db.collection('reports').insertOne(reportDoc);
+        await db.collection('reports').insertOne(reportDoc);
+        userReports.push(reportDoc);
+        allUserReports.push({ ...reportDoc, userProfileId, phoneNumber });
 
         // Add report to user's reports array in profile
         await db.collection('profiles').updateOne(
@@ -564,26 +861,33 @@ const generateData = async () => {
       }
 
       // Generate user-uploaded reports for each member
+      if (config.memberReports > 0 && memberProfiles.length > 0) {
+        console.log(`      📄 Creating ${config.memberReports} member reports...`);
+      }
       for (const member of memberProfiles) {
-        console.log(`      📄 Creating ${USER_UPLOADED_REPORTS_PER_MEMBER} user-uploaded reports for member ${member.firstName} ${member.lastName}...`);
-        for (let reportIdx = 0; reportIdx < USER_UPLOADED_REPORTS_PER_MEMBER; reportIdx++) {
+        const memberReportsPerMember = Math.floor(config.memberReports / config.members) + (memberProfiles.indexOf(member) < (config.memberReports % config.members) ? 1 : 0);
+        
+        for (let reportIdx = 0; reportIdx < memberReportsPerMember; reportIdx++) {
           const reportType = randomElement(REPORT_TYPES);
-          const reportDate = randomDate(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), new Date());
+          const reportDate = randomDate(oneYearAgo, now);
           const reportId = `RPT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           const memberDOBDate = member.dob instanceof Date ? member.dob : new Date(member.dob);
-          const memberAge = Math.floor((Date.now() - memberDOBDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+          const memberAge = calculateAge(memberDOBDate);
 
-          // Generate PDF
-          const pdfBuffer = await generatePDFReport(
-            `${member.firstName} ${member.lastName}`,
-            reportType,
-            reportDate,
-            memberAge,
-            member.gender,
-            member.bloodGroup
-          );
+          // Generate PDF (skip if SKIP_PDF_GENERATION is true)
+          let pdfBuffer: Buffer | null = null;
+          if (!SKIP_PDF_GENERATION) {
+            pdfBuffer = await generatePDFReport(
+              `${member.firstName} ${member.lastName}`,
+              reportType,
+              reportDate,
+              memberAge,
+              member.gender,
+              member.bloodGroup
+            );
+          }
 
-          // Upload to S3
+          // Upload to S3 (or get placeholder)
           const reportUrl = await uploadPDFToS3(pdfBuffer, member.phoneNumber, reportId);
 
           // Create report document
@@ -601,7 +905,7 @@ const generateData = async () => {
             uploadDate: reportDate,
             uploadedAt: reportDate,
             status: 'accepted',
-            createdBy: phoneNumber, // Created by the primary user
+            createdBy: phoneNumber,
             updatedBy: phoneNumber,
             sharedWith: [],
             parsedData: [],
@@ -623,18 +927,15 @@ const generateData = async () => {
       }
 
       // Link DC shared reports (pending)
-      if (dcReports.length > 0) {
-        console.log(`      🔗 Linking ${DC_SHARED_REPORTS_PER_USER} pending DC shared reports...`);
-        for (let i = 0; i < DC_SHARED_REPORTS_PER_USER && dcReportIndex < dcReports.length; i++) {
+      if (dcReports.length > 0 && config.dcPending > 0) {
+        for (let i = 0; i < config.dcPending && dcReportIndex < dcReports.length; i++) {
           const dcReport = dcReports[dcReportIndex % dcReports.length];
           dcReportIndex++;
 
-          // Update DC report to include this user's phone in sharedReportDetails with accepted: false
           if (!dcReport.sharedReportDetails) {
             dcReport.sharedReportDetails = [];
           }
 
-          // Check if phone already exists
           const existingShare = dcReport.sharedReportDetails.find(
             (share: any) => share.userContact === phoneNumber
           );
@@ -642,11 +943,11 @@ const generateData = async () => {
           if (!existingShare) {
             dcReport.sharedReportDetails.push({
               userContact: phoneNumber,
-              userId: null, // User hasn't accepted yet
+              userId: null,
               accepted: false,
               blocked: false,
               rejected: false,
-              sharedAt: randomDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), new Date()),
+              sharedAt: randomDate(oneYearAgo, now),
             });
 
             await db.collection('reports').updateOne(
@@ -658,18 +959,15 @@ const generateData = async () => {
       }
 
       // Link DC shared reports (accepted)
-      if (dcReports.length > 0) {
-        console.log(`      🔗 Linking ${DC_ACCEPTED_REPORTS_PER_USER} accepted DC shared reports...`);
-        for (let i = 0; i < DC_ACCEPTED_REPORTS_PER_USER && dcReportIndex < dcReports.length; i++) {
+      if (dcReports.length > 0 && config.dcAccepted > 0) {
+        for (let i = 0; i < config.dcAccepted && dcReportIndex < dcReports.length; i++) {
           const dcReport = dcReports[dcReportIndex % dcReports.length];
           dcReportIndex++;
 
-          // Update DC report to include this user's phone in sharedReportDetails with accepted: true
           if (!dcReport.sharedReportDetails) {
             dcReport.sharedReportDetails = [];
           }
 
-          // Check if phone already exists
           const existingShareIndex = dcReport.sharedReportDetails.findIndex(
             (share: any) => share.userContact === phoneNumber
           );
@@ -684,7 +982,7 @@ const generateData = async () => {
               accepted: true,
               blocked: false,
               rejected: false,
-              sharedAt: randomDate(new Date(Date.now() - 60 * 24 * 60 * 60 * 1000), new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
+              sharedAt: randomDate(oneYearAgo, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
             });
           }
 
@@ -694,85 +992,66 @@ const generateData = async () => {
           );
         }
       }
+
+      // Create user-shared reports (reports shared from this user to other users)
+      if (config.userShared > 0 && userReports.length > 0 && createdUsers.length > 1) {
+        for (let i = 0; i < config.userShared && i < userReports.length; i++) {
+          const reportToShare = userReports[i];
+          // Share with a random other user
+          const otherUsers = createdUsers.filter(u => String(u._id) !== String(userProfileId));
+          if (otherUsers.length > 0) {
+            const targetUser = randomElement(otherUsers);
+            const shareDate = randomDate(oneYearAgo, now);
+
+            // Find the report document in database to get its _id
+            const reportDoc = await db.collection('reports').findOne({ reportId: reportToShare.reportId });
+            if (reportDoc) {
+              // Add to report's sharedWith array
+              await db.collection('reports').updateOne(
+                { _id: reportDoc._id },
+                {
+                  $push: {
+                    sharedWith: {
+                      profileId: String(targetUser._id),
+                      phoneNumber: targetUser.phoneNumber,
+                      name: `${targetUser.firstName} ${targetUser.lastName}`,
+                      sharedAt: shareDate,
+                    },
+                  },
+                }
+              );
+
+              // Add to target user's sharedReports array in profile
+              await db.collection('profiles').updateOne(
+                { _id: targetUser._id },
+                {
+                  $push: {
+                    sharedReports: reportToShare.reportId,
+                  },
+                }
+              );
+            }
+          }
+        }
+      }
     }
 
     console.log(`\n✅ Created ${createdUsers.length} users with ${createdMembers.length} family members\n`);
 
-    // Generate 3-5 manual test records (for manual testing)
-    console.log('📝 Creating 3-5 manual test records...');
-    const manualTestCount = 3;
-    const manualTestUsers = createdUsers.slice(0, manualTestCount);
-    
-    for (const testUser of manualTestUsers) {
-      const testReportType = randomElement(REPORT_TYPES);
-      const testReportDate = new Date(); // Recent date for manual testing
-      const testReportId = `MANUAL-TEST-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const testUserDOBDate = testUser.dob instanceof Date ? testUser.dob : new Date(testUser.dob);
-      const testUserAge = Math.floor((Date.now() - testUserDOBDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-
-      // Generate PDF
-      const pdfBuffer = await generatePDFReport(
-        `${testUser.firstName} ${testUser.lastName}`,
-        testReportType,
-        testReportDate,
-        testUserAge,
-        testUser.gender,
-        testUser.bloodGroup
-      );
-
-      // Upload to S3
-      const reportUrl = await uploadPDFToS3(pdfBuffer, testUser.phoneNumber, testReportId);
-
-      // Create report document
-      const reportDoc = {
-        userId: testUser.phoneNumber,
-        userName: `${testUser.firstName} ${testUser.lastName}`,
-        reportId: testReportId,
-        reportUrl: reportUrl,
-        reportDoc: reportUrl,
-        name: testReportType,
-        type: 'Blood Report',
-        testName: testReportType,
-        documentType: 'Blood Report',
-        reportDate: testReportDate,
-        uploadDate: testReportDate,
-        uploadedAt: testReportDate,
-        status: 'accepted',
-        createdBy: testUser.phoneNumber,
-        updatedBy: testUser.phoneNumber,
-        sharedWith: [],
-        parsedData: [],
-        parameters: [],
-        parametersScanned: false,
-        conditions: [],
-        description: `MANUAL TEST REPORT - ${testReportType}`,
-        remarks: 'This is a manual test record for validation',
-      };
-
-      await db.collection('reports').insertOne(reportDoc);
-
-      // Add report to user's reports array in profile
-      await db.collection('profiles').updateOne(
-        { _id: testUser._id },
-        { $push: { reports: reportDoc } }
-      );
-    }
-
-    console.log(`✅ Created ${manualTestCount} manual test records\n`);
-
+    // Summary
     console.log('🎉 Data generation completed successfully!');
     console.log(`\n📊 Summary:`);
     console.log(`   - Users: ${createdUsers.length} (phone +15555550101 to +15555550120)`);
-    console.log(`   - Family Members: ${createdMembers.length} (5 per user)`);
-    console.log(`   - User-uploaded Reports: ${createdUsers.length * USER_UPLOADED_REPORTS_PER_USER + createdMembers.length * USER_UPLOADED_REPORTS_PER_MEMBER}`);
-    console.log(`   - DC Shared Reports (Pending): ${dcReports.length > 0 ? createdUsers.length * DC_SHARED_REPORTS_PER_USER : 0} (${dcReports.length === 0 ? 'No DC reports found - ensure DC data is generated first' : 'linked successfully'})`);
-    console.log(`   - DC Shared Reports (Accepted): ${dcReports.length > 0 ? createdUsers.length * DC_ACCEPTED_REPORTS_PER_USER : 0} (${dcReports.length === 0 ? 'No DC reports found - ensure DC data is generated first' : 'linked successfully'})`);
-    console.log(`   - Manual Test Records: ${manualTestCount}`);
+    console.log(`   - Family Members: ${createdMembers.length} (varying per user)`);
+    console.log(`   - All users have BMI, Food Allergies, and Diagnosed Conditions data`);
+    console.log(`   - Pediatric members have BMI, MUAC, Anthropometric, and IAP Growth Charts data`);
+    console.log(`   - All data is backdated over 1 year period`);
+    console.log(`   - DC Shared Reports linked from actual DC data`);
+    console.log(`   - User-shared reports created between users`);
     
     if (dcReports.length === 0) {
       console.log(`\n⚠️  Note: DC reports were not found in the database.`);
       console.log(`   Please ensure DC data has been generated first (run data/dc/generate-data.ts)`);
-      console.log(`   DC reports should have 'diagnosticCenter' and 'sharedReportDetails' fields`);
     }
 
   } catch (error) {
@@ -795,4 +1074,3 @@ generateData()
     console.error(error.stack);
     process.exit(1);
   });
-

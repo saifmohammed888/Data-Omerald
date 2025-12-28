@@ -43,17 +43,51 @@ const clearData = async () => {
     console.log('🧹 Clearing test data...\n');
 
     // Delete profiles (users and members) with phone numbers +15555550101 to +15555550170
-    // (101-120 for users, 121-170 for members - 50 members for 10 users * 5 members)
+    // Phone format: +1555555XXXX where XXXX is 0101-0170 (users: 0101-0120, members: 0121-0170)
+    const phoneRegex = /^\+1555555(010[1-9]|01[1-9][0-9]|0120|01[2-6][0-9]|0170)$/;
+    
+    // First, find all matching profiles to see what we're deleting
+    const matchingProfiles = await db.collection('profiles').find({
+      phoneNumber: phoneRegex
+    }).toArray();
+    console.log(`   Found ${matchingProfiles.length} profiles matching phone number range`);
+    
     const profilesResult = await db.collection('profiles').deleteMany({
-      phoneNumber: { $regex: /^\+1555555(010[1-9]|01[1-9][0-9]|01[2-6][0-9]|0170)$/ }
+      phoneNumber: phoneRegex
     });
     console.log(`✅ Deleted ${profilesResult.deletedCount} profiles`);
 
     // Delete user reports (reports with userId in the phone number range)
+    const matchingReports = await db.collection('reports').find({
+      userId: phoneRegex
+    }).toArray();
+    console.log(`   Found ${matchingReports.length} reports matching phone number range`);
+    
     const reportsResult = await db.collection('reports').deleteMany({
-      userId: { $regex: /^\+1555555(010[1-9]|01[1-9][0-9]|01[2-6][0-9]|0170)$/ }
+      userId: phoneRegex
     });
     console.log(`✅ Deleted ${reportsResult.deletedCount} user reports`);
+    
+    // Also delete by email pattern (in case phone numbers don't match or were changed)
+    // This helps if there are profiles with these emails but different phone numbers
+    const emailDeleteResult = await db.collection('profiles').deleteMany({
+      email: { $regex: /@example\.com$/ }
+    });
+    if (emailDeleteResult.deletedCount > 0) {
+      console.log(`✅ Deleted ${emailDeleteResult.deletedCount} profiles by email pattern (@example.com)`);
+    }
+    
+    // Also delete reports that might have been created by these profiles
+    // (Some reports might not have userId matching phone pattern)
+    const emailReportsResult = await db.collection('reports').deleteMany({
+      $or: [
+        { userId: { $regex: /^\+1555555/ } }, // Any phone starting with +1555555
+        { userName: { $exists: true } } // Any report with userName (most user reports have this)
+      ]
+    });
+    if (emailReportsResult.deletedCount > 0) {
+      console.log(`✅ Deleted ${emailReportsResult.deletedCount} additional reports`);
+    }
 
     // Note: We don't delete DC reports, only remove sharedReportDetails entries for our test phone numbers
     // This is because DC reports belong to the DC app and should remain
